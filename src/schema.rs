@@ -21,7 +21,8 @@ impl ColumnMetaData {
     }
 }
 
-#[derive(Debug)]
+// required Clone trait due to its parent struct RuntimeSchema derive Clone
+#[derive(Debug, Clone)]
 pub(crate) struct MeterSchema {
     group_name: String,
     flow: Option<String>,
@@ -70,7 +71,9 @@ impl MeterSchema {
     }
 }
 
-#[derive(Debug)]
+// this Clone derive as worker keeps one copy as the active source in DbState,
+//and sends another copy back to the caller through the reply channel.
+#[derive(Debug, Clone)]
 pub(crate) struct RuntimeSchema {
     table_name: String,
     time_column_name: String,

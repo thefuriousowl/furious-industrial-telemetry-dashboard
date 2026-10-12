@@ -15,7 +15,8 @@ mod sql_command;
 mod telemetry;
 mod worker;
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
     // --------------------------------------------------
     // 1. Create request channel
     //
@@ -78,7 +79,7 @@ fn main() -> ExitCode {
         ignored_columns: vec!["Id".to_string()],
     };
     let db_cli = DbClient::new(request_sender.clone());
-    let open_db_result = db_cli.open_database("local-data/Database.db");
+    let open_db_result = db_cli.open_database("local-data/Database.db").await;
 
     match open_db_result {
         Ok(()) => println!("database opened"),
@@ -90,7 +91,7 @@ fn main() -> ExitCode {
     // --------------------------------------------------
     let mut main_tables = Vec::new();
 
-    let list_table_result = db_cli.list_table();
+    let list_table_result = db_cli.list_table().await;
     match list_table_result {
         Ok(tables) => {
             println!("list table complete");
@@ -107,7 +108,7 @@ fn main() -> ExitCode {
     // GetColumns worker
     // --------------------------------------------------
     let mut main_columns_metadata = Vec::new();
-    let get_columns_result = db_cli.get_available_columns(&main_tables[0]);
+    let get_columns_result = db_cli.get_available_columns(&main_tables[0]).await;
 
     match get_columns_result {
         Ok(metadata) => {
@@ -126,7 +127,9 @@ fn main() -> ExitCode {
 
     let meter_overwrite_policy = false;
     let expected_time_column_name = String::from("Time");
-    let get_schema_result = db_cli.get_schema(config, meter_overwrite_policy);
+    let get_schema_result = db_cli
+        .configure_source(config, meter_overwrite_policy)
+        .await;
     let mut main_runtime_schema: Option<RuntimeSchema> = None;
     match get_schema_result {
         Ok(schema) => {
@@ -137,7 +140,7 @@ fn main() -> ExitCode {
         }
     }
 
-    println!("Current RuntimeSchema: {:#?}", main_runtime_schema);
+    // println!("Current RuntimeSchema: {:#?}", main_runtime_schema);
 
     // --------------------------------------------------
     // ReadRange worker
@@ -149,13 +152,15 @@ fn main() -> ExitCode {
         main_columns_metadata[3].name().to_string(),
     ];
 
-    let get_telemetry_result = db_cli.get_telemetry(
-        &main_tables[0].clone(),
-        selected_columns,
-        &expected_time_column_name,
-        start.to_string(),
-        end.to_string(),
-    );
+    let get_telemetry_result = db_cli
+        .get_telemetry(
+            &main_tables[0].clone(),
+            selected_columns,
+            &expected_time_column_name,
+            start.to_string(),
+            end.to_string(),
+        )
+        .await;
 
     let mut telemetry_rows = Vec::new();
     match get_telemetry_result {

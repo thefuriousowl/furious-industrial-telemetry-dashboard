@@ -17,7 +17,7 @@ pub(crate) enum DbRequest {
         table_name: String,
         reply: oneshot::Sender<Result<Vec<ColumnMetaData>, String>>,
     },
-    GetRuntimeSchema {
+    ConfigureSource {
         config: SourceConfig,
         meter_overwrite_policy: bool,
         reply: oneshot::Sender<Result<RuntimeSchema, String>>,

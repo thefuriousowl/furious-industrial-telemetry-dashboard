@@ -9,6 +9,7 @@ use crate::{
     telemetry::TelemetryRow,
 };
 
+#[derive(Debug, Clone)]
 pub(crate) struct DbClient {
     sender: mpsc::Sender<DbRequest>,
 }
@@ -16,7 +17,7 @@ impl DbClient {
     pub(crate) fn new(sender: mpsc::Sender<DbRequest>) -> Self {
         Self { sender }
     }
-    pub(crate) fn open_database(&self, path: &str) -> Result<(), String> {
+    pub(crate) async fn open_database(&self, path: &str) -> Result<(), String> {
         let (reply_sender, reply_receiver) = oneshot::channel::<Result<(), String>>();
 
         self.sender
@@ -26,10 +27,10 @@ impl DbClient {
             })
             .map_err(|e| e.to_string())?;
 
-        reply_receiver.blocking_recv().map_err(|e| e.to_string())?
+        reply_receiver.await.map_err(|e| e.to_string())?
     }
 
-    pub(crate) fn list_table(&self) -> Result<Vec<String>, String> {
+    pub(crate) async fn list_table(&self) -> Result<Vec<String>, String> {
         let (reply_sender, reply_receiver) = oneshot::channel::<Result<Vec<String>, String>>();
 
         self.sender
@@ -37,10 +38,10 @@ impl DbClient {
                 reply: reply_sender,
             })
             .map_err(|e| e.to_string())?;
-        reply_receiver.blocking_recv().map_err(|e| e.to_string())?
+        reply_receiver.await.map_err(|e| e.to_string())?
     }
 
-    pub(crate) fn get_available_columns(
+    pub(crate) async fn get_available_columns(
         &self,
         table_name: &str,
     ) -> Result<Vec<ColumnMetaData>, String> {
@@ -52,26 +53,26 @@ impl DbClient {
                 reply: reply_sender,
             })
             .map_err(|e| e.to_string())?;
-        reply_receiver.blocking_recv().map_err(|e| e.to_string())?
+        reply_receiver.await.map_err(|e| e.to_string())?
     }
 
-    pub(crate) fn get_schema(
+    pub(crate) async fn configure_source(
         &self,
         config: SourceConfig,
         meter_overwrite_policy: bool,
     ) -> Result<RuntimeSchema, String> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
-            .send(DbRequest::GetRuntimeSchema {
+            .send(DbRequest::ConfigureSource {
                 config,
                 meter_overwrite_policy,
                 reply: reply_sender,
             })
             .map_err(|e| e.to_string())?;
-        reply_receiver.blocking_recv().map_err(|e| e.to_string())?
+        reply_receiver.await.map_err(|e| e.to_string())?
     }
 
-    pub(crate) fn get_telemetry(
+    pub(crate) async fn get_telemetry(
         &self,
         table_name: &str,
         selected_columns: Vec<String>,
@@ -90,6 +91,6 @@ impl DbClient {
                 reply: reply_sender,
             })
             .map_err(|e| e.to_string())?;
-        reply_receiver.blocking_recv().map_err(|e| e.to_string())?
+        reply_receiver.await.map_err(|e| e.to_string())?
     }
 }

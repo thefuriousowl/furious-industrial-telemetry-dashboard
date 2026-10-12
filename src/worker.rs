@@ -1,10 +1,13 @@
-use crate::{db::DbReader, request::DbRequest};
+use crate::{db::DbReader, request::DbRequest, schema::RuntimeSchema};
 use std::sync::mpsc;
 
 const DATABASE_NOT_IN_OPEN_STATE_ERROR: &str = "database is not open";
 pub(crate) enum DbState {
     Closed,
-    Open(DbReader),
+    Open {
+        reader: DbReader,
+        source: Option<RuntimeSchema>,
+    },
 }
 pub(crate) struct DbWorker {
     state: DbState,
@@ -19,14 +22,7 @@ impl DbWorker {
     }
 
     pub(crate) fn set_state(&mut self, state: DbState) {
-        match state {
-            DbState::Open(reader) => {
-                self.state = DbState::Open(reader);
-            }
-            DbState::Closed => {
-                self.state = DbState::Closed;
-            }
-        }
+        self.state = state
     }
 
     pub(crate) fn state(&self) -> &DbState {
@@ -39,8 +35,11 @@ impl DbWorker {
                 DbRequest::OpenDatabase { path, reply } => {
                     println!("received OpenDatabase");
                     let db_reader = match DbReader::open(&path) {
-                        Ok(conn) => {
-                            self.set_state(DbState::Open(conn));
+                        Ok(reader) => {
+                            self.set_state(DbState::Open {
+                                reader,
+                                source: None,
+                            });
                             Ok(())
                         }
                         Err(e) => Err(e),
@@ -52,7 +51,7 @@ impl DbWorker {
                     println!("received ListTables");
                     let result = match self.state() {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open(reader) => reader.list_table(),
+                        DbState::Open { reader, .. } => reader.list_table(),
                     };
 
                     let _ = reply.send(result);
@@ -61,21 +60,27 @@ impl DbWorker {
                     println!("received GetColumns");
                     let result = match self.state() {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open(reader) => reader.get_columns_metadata(&table_name),
+                        DbState::Open { reader, .. } => reader.get_columns_metadata(&table_name),
                     };
 
                     let _ = reply.send(result);
                 }
-                DbRequest::GetRuntimeSchema {
+                DbRequest::ConfigureSource {
                     config,
                     meter_overwrite_policy,
                     reply,
                 } => {
-                    println!("received GetRuntimeSchema");
-                    let result = match self.state() {
+                    println!("received ConfigureSource");
+                    let result = match &mut self.state {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open(reader) => {
-                            reader.discover_schema(config, meter_overwrite_policy)
+                        DbState::Open { reader, source } => {
+                            match reader.discover_schema(config, meter_overwrite_policy) {
+                                Ok(schema) => {
+                                    *source = Some(schema.clone()); // one copy stays in state, original goes to reply
+                                    Ok(schema)
+                                }
+                                Err(e) => Err(e),
+                            }
                         }
                     };
 
@@ -92,7 +97,7 @@ impl DbWorker {
                     println!("received ReadRange");
                     let result = match self.state() {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open(reader) => reader.get_telemetry(
+                        DbState::Open { reader, .. } => reader.get_telemetry(
                             &table_name,
                             &expected_time_column_name,
                             &selected_columns,
