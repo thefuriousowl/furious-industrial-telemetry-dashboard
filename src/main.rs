@@ -1,12 +1,7 @@
 use std::{process::ExitCode, sync::mpsc, thread};
 
-use tokio::sync::oneshot;
-
 use crate::{
-    client::DbClient,
-    config::SourceConfig,
-    request::DbRequest,
-    schema::{ColumnMetaData, RuntimeSchema},
+    client::DbClient, config::SourceConfig, request::DbRequest, schema::RuntimeSchema,
     worker::DbWorker,
 };
 

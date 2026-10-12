@@ -95,7 +95,7 @@ impl DbWorker {
                         DbState::Open(reader) => reader.get_telemetry(
                             &table_name,
                             &expected_time_column_name,
-                            selected_columns,
+                            &selected_columns,
                             start_datetime,
                             end_datetime,
                         ),

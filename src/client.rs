@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::{
-    config::{self, SourceConfig},
+    config::SourceConfig,
     request::DbRequest,
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,

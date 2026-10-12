@@ -94,14 +94,18 @@ impl DbReader {
         &self,
         table_name: &str,
         expected_time_column_name: &str,
-        selected_columns: Vec<String>,
+        selected_columns: &[String],
         start: String,
         end: String,
     ) -> Result<Vec<TelemetryRow>, String> {
-        let mut stmt = self
-            .conn
-            .prepare(get_query_string(table_name, expected_time_column_name).as_str())
-            .map_err(|e| e.to_string())?;
+        let columns_metadata = self.get_columns_metadata(table_name)?;
+        let sql = get_query_string(
+            table_name,
+            expected_time_column_name,
+            &columns_metadata,
+            selected_columns,
+        )?;
+        let mut stmt = self.conn.prepare(&sql).map_err(|e| e.to_string())?;
 
         let mut rows = stmt.query([start, end]).map_err(|e| e.to_string())?;
 
@@ -114,7 +118,7 @@ impl DbReader {
 
             let mut values = BTreeMap::new();
 
-            for col_name in &selected_columns {
+            for col_name in selected_columns {
                 let value: Option<f64> = r.get(col_name.as_str()).map_err(|e| e.to_string())?;
 
                 values.insert(col_name.to_string(), value);
