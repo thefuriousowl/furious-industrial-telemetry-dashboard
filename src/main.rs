@@ -6,10 +6,7 @@ use axum::{
 };
 
 use crate::{
-    api::{list_available_columns, list_table, source},
-    client::DbClient,
-    request::DbRequest,
-    worker::DbWorker,
+    api::{list_available_columns, list_table, source, telemetry}, client::DbClient, request::DbRequest, worker::DbWorker,
 };
 
 mod api;
@@ -22,6 +19,7 @@ mod schema;
 mod sql_command;
 mod telemetry;
 mod worker;
+mod dto;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -67,6 +65,7 @@ async fn main() -> ExitCode {
         .route("/api/tables", get(list_table))
         .route("/api/tables/{table}/columns", get(list_available_columns))
         .route("/api/source", post(source))
+        .route("/api/telemetry", get(telemetry))
         .with_state(db_cli);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

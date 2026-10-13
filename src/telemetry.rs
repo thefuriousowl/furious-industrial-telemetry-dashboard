@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+use serde::Serialize;
+
+#[derive(Debug, Serialize, Clone)]
 pub(crate) struct TelemetryRow {
     time: String,
     values: BTreeMap<String, Option<f64>>,
