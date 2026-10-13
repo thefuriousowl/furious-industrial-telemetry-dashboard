@@ -21,6 +21,9 @@ pub(crate) enum DbRequest {
         config: SourceConfig,
         reply: oneshot::Sender<Result<RuntimeSchema, String>>,
     },
+    GetSource {
+        reply: oneshot::Sender<Result<RuntimeSchema, String>>,
+    },
     ReadRange {
         selected_columns: Vec<String>,
         start_datetime: String,

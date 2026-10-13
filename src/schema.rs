@@ -83,4 +83,7 @@ impl RuntimeSchema {
     pub(crate) fn time_column_name(&self) -> &str {
         &self.time_column_name
     }
+    pub(crate) fn signals(&self) -> &[SignalConfig] {
+        &self.signals
+    }
 }

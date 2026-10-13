@@ -5,11 +5,7 @@ use axum::{
 };
 
 use crate::{
-    client::DbClient,
-    config::SourceConfig,
-    dto::TelemetryQuery,
-    schema::{ColumnMetaData, RuntimeSchema},
-    telemetry::TelemetryRow,
+    client::DbClient, config::SourceConfig, dto::TelemetryQuery, schema::{ColumnMetaData, RuntimeSchema}, telemetry::TelemetryRow,
 };
 
 pub(crate) async fn list_table(
@@ -41,6 +37,14 @@ pub(crate) async fn source(
     match result {
         Ok(schema) => Ok(Json(schema)),
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+    }
+}
+
+pub(crate) async fn get_source(State(db): State<DbClient>) -> Result<Json<RuntimeSchema>, (StatusCode, String)> {
+    let result = db.get_source().await;
+    match result {
+        Ok(schema) => Ok(Json(schema)),
+        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
     }
 }
 

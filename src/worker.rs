@@ -1,8 +1,9 @@
-use crate::{db::DbReader, request::DbRequest, schema::RuntimeSchema};
+use crate::{ db::DbReader, request::DbRequest, schema::RuntimeSchema };
 use std::sync::mpsc;
 
 const DATABASE_NOT_IN_OPEN_STATE_ERROR: &str = "database is not open";
 const SOURCE_NOT_CONFIG: &str = "source is not configured";
+
 pub(crate) enum DbState {
     Closed,
     Open {
@@ -83,30 +84,54 @@ impl DbWorker {
 
                     let _ = reply.send(result);
                 }
-                DbRequest::ReadRange {
-                    selected_columns,
-                    start_datetime,
-                    end_datetime,
-                    reply,
-                } => {
+                DbRequest::GetSource { reply } => {
+                    println!("received GetSource");
+                    let result = match self.state() {
+                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
+                        DbState::Open { source: None, .. } => Err(SOURCE_NOT_CONFIG.to_string()),
+                        DbState::Open { source: Some(src), .. } => Ok(src.clone()),
+                    };
+                    let _ = reply.send(result);
+                }
+                DbRequest::ReadRange { selected_columns, start_datetime, end_datetime, reply } => {
                     println!("received ReadRange");
                     let result = match self.state() {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open { reader, source } => {
-                            if let Some(src) = source {
+                        DbState::Open { source: None, .. } => Err(SOURCE_NOT_CONFIG.to_string()),
+                        DbState::Open { reader, source: Some(src) } => {
+                            let mismatch_source_selected_columns = selected_columns
+                                .iter()
+                                .filter_map(|selected_column| {
+                                    match
+                                        src
+                                            .signals()
+                                            .iter()
+                                            .any(|signal| signal.column() == selected_column)
+                                    {
+                                        true => None,
+                                        false => Some(selected_column),
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+
+                            if !mismatch_source_selected_columns.is_empty() {
+                                Err(
+                                    format!(
+                                        "selected column {:#?} not found in source config",
+                                        mismatch_source_selected_columns
+                                    )
+                                )
+                            } else {
                                 reader.get_telemetry(
                                     src.table_name(),
                                     src.time_column_name(),
                                     &selected_columns,
                                     start_datetime,
-                                    end_datetime,
+                                    end_datetime
                                 )
-                            } else {
-                                Err(SOURCE_NOT_CONFIG.to_string())
                             }
                         }
                     };
-
                     let _ = reply.send(result);
                 }
                 DbRequest::Shutdown => {

@@ -70,6 +70,14 @@ impl DbClient {
         reply_receiver.await.map_err(|e| e.to_string())?
     }
 
+    pub(crate) async fn get_source(
+        &self
+    ) -> Result<RuntimeSchema, String> {
+        let (reply_sender, reply_receiver) = oneshot::channel();
+        self.sender.send(DbRequest::GetSource { reply: reply_sender }).map_err(|e| e.to_string())?;
+        reply_receiver.await.map_err(|e| e.to_string())?
+    }
+
     pub(crate) async fn get_telemetry(
         &self,
         selected_columns: Vec<String>,

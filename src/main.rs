@@ -2,14 +2,11 @@ use std::{process::ExitCode, sync::mpsc, thread};
 
 use axum::{
     Router,
-    routing::{get, post},
+    routing::{get},
 };
 
 use crate::{
-    api::{list_available_columns, list_table, source, telemetry},
-    client::DbClient,
-    request::DbRequest,
-    worker::DbWorker,
+    api::{get_source, list_available_columns, list_table, source, telemetry}, client::DbClient, request::DbRequest, worker::DbWorker,
 };
 
 mod api;
@@ -66,7 +63,7 @@ async fn main() -> ExitCode {
     let app = Router::new()
         .route("/api/tables", get(list_table))
         .route("/api/tables/{table}/columns", get(list_available_columns))
-        .route("/api/source", post(source))
+        .route("/api/source", get(get_source).post(source))
         .route("/api/telemetry", get(telemetry))
         .with_state(db_cli);
 
