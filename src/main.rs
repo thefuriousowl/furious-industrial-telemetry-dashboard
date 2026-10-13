@@ -6,20 +6,22 @@ use axum::{
 };
 
 use crate::{
-    api::{list_available_columns, list_table, source, telemetry}, client::DbClient, request::DbRequest, worker::DbWorker,
+    api::{list_available_columns, list_table, source, telemetry},
+    client::DbClient,
+    request::DbRequest,
+    worker::DbWorker,
 };
 
 mod api;
 mod client;
 mod config;
 mod db;
-mod kind;
+mod dto;
 mod request;
 mod schema;
 mod sql_command;
 mod telemetry;
 mod worker;
-mod dto;
 
 #[tokio::main]
 async fn main() -> ExitCode {

@@ -87,8 +87,7 @@ impl DbReader {
             config.table_name,
             current_column_metadata,
             config.time_column_name,
-            config.ignored_columns,
-            config.meter_overwrite_policy,
+            config.signals,
         )
         .map_err(|e| e.to_string())
     }
