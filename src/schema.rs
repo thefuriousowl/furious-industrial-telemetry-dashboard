@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
+use serde::Serialize;
+
 use crate::kind::{MetricKind, parse_metric};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct ColumnMetaData {
     name: String,
     declare_type: String,
@@ -22,7 +24,7 @@ impl ColumnMetaData {
 }
 
 // required Clone trait due to its parent struct RuntimeSchema derive Clone
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct MeterSchema {
     group_name: String,
     flow: Option<String>,
@@ -73,7 +75,7 @@ impl MeterSchema {
 
 // this Clone derive as worker keeps one copy as the active source in DbState,
 //and sends another copy back to the caller through the reply channel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub(crate) struct RuntimeSchema {
     table_name: String,
     time_column_name: String,
@@ -128,5 +130,21 @@ impl RuntimeSchema {
             meters,
             standalone_fields,
         })
+    }
+
+    pub(crate) fn table_name(&self) -> &str {
+        &self.table_name
+    }
+
+    pub(crate) fn time_column_name(&self) -> &str {
+        &self.time_column_name
+    }
+
+    pub(crate) fn meters(&self) -> &BTreeMap<String, MeterSchema> {
+        &self.meters
+    }
+
+    pub(crate) fn standalone_fields(&self) -> &Vec<ColumnMetaData> {
+        &self.standalone_fields
     }
 }

@@ -59,13 +59,11 @@ impl DbClient {
     pub(crate) async fn configure_source(
         &self,
         config: SourceConfig,
-        meter_overwrite_policy: bool,
     ) -> Result<RuntimeSchema, String> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
             .send(DbRequest::ConfigureSource {
                 config,
-                meter_overwrite_policy,
                 reply: reply_sender,
             })
             .map_err(|e| e.to_string())?;
@@ -74,18 +72,14 @@ impl DbClient {
 
     pub(crate) async fn get_telemetry(
         &self,
-        table_name: &str,
         selected_columns: Vec<String>,
-        expected_time_column_name: &str,
         start_datetime: String,
         end_datetime: String,
     ) -> Result<Vec<TelemetryRow>, String> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
             .send(DbRequest::ReadRange {
-                table_name: table_name.to_string(),
                 selected_columns,
-                expected_time_column_name: expected_time_column_name.to_string(),
                 start_datetime,
                 end_datetime,
                 reply: reply_sender,

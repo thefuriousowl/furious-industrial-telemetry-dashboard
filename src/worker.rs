@@ -2,6 +2,7 @@ use crate::{db::DbReader, request::DbRequest, schema::RuntimeSchema};
 use std::sync::mpsc;
 
 const DATABASE_NOT_IN_OPEN_STATE_ERROR: &str = "database is not open";
+const SOURCE_NOT_CONFIG: &str = "source is not configured";
 pub(crate) enum DbState {
     Closed,
     Open {
@@ -22,7 +23,7 @@ impl DbWorker {
     }
 
     pub(crate) fn set_state(&mut self, state: DbState) {
-        self.state = state
+        self.state = state;
     }
 
     pub(crate) fn state(&self) -> &DbState {
@@ -65,16 +66,12 @@ impl DbWorker {
 
                     let _ = reply.send(result);
                 }
-                DbRequest::ConfigureSource {
-                    config,
-                    meter_overwrite_policy,
-                    reply,
-                } => {
+                DbRequest::ConfigureSource { config, reply } => {
                     println!("received ConfigureSource");
                     let result = match &mut self.state {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
                         DbState::Open { reader, source } => {
-                            match reader.discover_schema(config, meter_overwrite_policy) {
+                            match reader.discover_schema(config) {
                                 Ok(schema) => {
                                     *source = Some(schema.clone()); // one copy stays in state, original goes to reply
                                     Ok(schema)
@@ -87,9 +84,7 @@ impl DbWorker {
                     let _ = reply.send(result);
                 }
                 DbRequest::ReadRange {
-                    table_name,
                     selected_columns,
-                    expected_time_column_name,
                     start_datetime,
                     end_datetime,
                     reply,
@@ -97,13 +92,19 @@ impl DbWorker {
                     println!("received ReadRange");
                     let result = match self.state() {
                         DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open { reader, .. } => reader.get_telemetry(
-                            &table_name,
-                            &expected_time_column_name,
-                            &selected_columns,
-                            start_datetime,
-                            end_datetime,
-                        ),
+                        DbState::Open { reader, source } => {
+                            if let Some(src) = source {
+                                reader.get_telemetry(
+                                    src.table_name(),
+                                    src.time_column_name(),
+                                    &selected_columns,
+                                    start_datetime,
+                                    end_datetime,
+                                )
+                            } else {
+                                Err(SOURCE_NOT_CONFIG.to_string())
+                            }
+                        }
                     };
 
                     let _ = reply.send(result);

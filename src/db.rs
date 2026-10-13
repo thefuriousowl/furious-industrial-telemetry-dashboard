@@ -56,15 +56,18 @@ impl DbReader {
             })
             .map_err(|e| e.to_string())?;
 
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
+        let columns_metadata = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+
+        if columns_metadata.is_empty() {
+            return Err(format!("table '{}' not found", &table_name));
+        }
+
+        Ok(columns_metadata)
     }
 
-    pub(crate) fn discover_schema(
-        &self,
-        config: SourceConfig,
-        meter_overwrite_policy: bool,
-    ) -> Result<RuntimeSchema, String> {
+    pub(crate) fn discover_schema(&self, config: SourceConfig) -> Result<RuntimeSchema, String> {
         let current_column_metadata = self
             .get_columns_metadata(&config.table_name)
             .map_err(|e| e.to_string())?;
@@ -85,7 +88,7 @@ impl DbReader {
             current_column_metadata,
             config.time_column_name,
             config.ignored_columns,
-            meter_overwrite_policy,
+            config.meter_overwrite_policy,
         )
         .map_err(|e| e.to_string())
     }
