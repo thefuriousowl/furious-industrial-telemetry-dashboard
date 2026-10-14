@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::config::SignalConfig;
+use crate::{config::SignalConfig, error::DbError};
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ColumnMetaData {
@@ -35,15 +35,13 @@ impl RuntimeSchema {
         columns_metadata: Vec<ColumnMetaData>,
         expected_time_column_name: String,
         signals: Vec<SignalConfig>,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, DbError> {
         let time_column_exists = columns_metadata
             .iter()
             .any(|col| col.name() == expected_time_column_name);
 
         if !time_column_exists {
-            return Err(format!(
-                "expected time column name {expected_time_column_name} does not exists"
-            ));
+            return Err(DbError::ColumnNotFound(vec![expected_time_column_name]));
         }
 
         let mut seen_columns = std::collections::HashSet::new();
@@ -62,16 +60,24 @@ impl RuntimeSchema {
         }
 
         if !duplicated_columns.is_empty() {
-            return Err(format!("duplicated columns found: {duplicated_columns:?}"));
+            return Err(DbError::DuplicateColumn(
+                duplicated_columns
+                    .iter()
+                    .map(|col| col.to_string())
+                    .collect(),
+            ));
         }
         if !duplicated_group_label.is_empty() {
-            return Err(format!(
-                "duplicated group-label pair found: {duplicated_group_label:?}"
+            return Err(DbError::DuplicateGroupLabel(
+                duplicated_group_label
+                    .iter()
+                    .map(|(grp, label)| (grp.to_string(), label.to_string()))
+                    .collect(),
             ));
         }
 
         if signals.is_empty() {
-            return Err(format!("signals must not be empty"));
+            return Err(DbError::EmptySignals);
         }
         let mismatch_expected_columns = signals
             .iter()
@@ -89,8 +95,11 @@ impl RuntimeSchema {
             .collect::<Vec<_>>();
 
         if !mismatch_expected_columns.is_empty() {
-            return Err(format!(
-                "expected columns {mismatch_expected_columns:?} does not exists"
+            return Err(DbError::ColumnNotFound(
+                mismatch_expected_columns
+                    .iter()
+                    .map(|col| col.to_string())
+                    .collect(),
             ));
         }
         Ok(Self {

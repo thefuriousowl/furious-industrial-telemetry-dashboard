@@ -18,7 +18,7 @@ pub(crate) async fn list_table(
     let result = app_state.db_cli().list_table().await;
     match result {
         Ok(tables) => Ok(Json(tables)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        Err(e) => Err((e.status_code(), e.to_string())),
     }
 }
 
@@ -29,7 +29,7 @@ pub(crate) async fn list_available_columns(
     let result = app_state.db_cli().get_available_columns(&table).await;
     match result {
         Ok(columns) => Ok(Json(columns)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        Err(e) => Err((e.status_code(), e.to_string())),
     }
 }
 
@@ -52,7 +52,7 @@ pub(crate) async fn source(
 
             Ok(Json(schema))
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        Err(e) => Err((e.status_code(), e.to_string())),
     }
 }
 
@@ -62,7 +62,7 @@ pub(crate) async fn get_source(
     let result = app_state.db_cli().get_source().await;
     match result {
         Ok(schema) => Ok(Json(schema)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        Err(e) => Err((e.status_code(), e.to_string())),
     }
 }
 
@@ -82,6 +82,6 @@ pub(crate) async fn telemetry(
         .await;
     match result {
         Ok(telemetry) => Ok(Json(telemetry)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string())),
+        Err(e) => Err((e.status_code(), e.to_string())),
     }
 }

@@ -4,6 +4,7 @@ use tokio::sync::oneshot;
 
 use crate::{
     config::{AppConfig, SourceConfig},
+    error::DbError,
     request::DbRequest,
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,
@@ -42,67 +43,77 @@ impl DbClient {
     pub(crate) fn new(sender: mpsc::Sender<DbRequest>) -> Self {
         Self { sender }
     }
-    pub(crate) async fn open_database(&self, path: &str) -> Result<(), String> {
-        let (reply_sender, reply_receiver) = oneshot::channel::<Result<(), String>>();
+    pub(crate) async fn open_database(&self, path: &str) -> Result<(), DbError> {
+        let (reply_sender, reply_receiver) = oneshot::channel::<Result<(), DbError>>();
 
         self.sender
             .send(DbRequest::OpenDatabase {
                 path: path.to_string(),
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| DbError::Channel(e.to_string()))?;
 
-        reply_receiver.await.map_err(|e| e.to_string())?
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 
-    pub(crate) async fn list_table(&self) -> Result<Vec<String>, String> {
-        let (reply_sender, reply_receiver) = oneshot::channel::<Result<Vec<String>, String>>();
+    pub(crate) async fn list_table(&self) -> Result<Vec<String>, DbError> {
+        let (reply_sender, reply_receiver) = oneshot::channel::<Result<Vec<String>, DbError>>();
 
         self.sender
             .send(DbRequest::ListTables {
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
-        reply_receiver.await.map_err(|e| e.to_string())?
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 
     pub(crate) async fn get_available_columns(
         &self,
         table_name: &str,
-    ) -> Result<Vec<ColumnMetaData>, String> {
+    ) -> Result<Vec<ColumnMetaData>, DbError> {
         let (reply_sender, reply_receiver) =
-            oneshot::channel::<Result<Vec<ColumnMetaData>, String>>();
+            oneshot::channel::<Result<Vec<ColumnMetaData>, DbError>>();
         self.sender
             .send(DbRequest::GetColumns {
                 table_name: table_name.to_string(),
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
-        reply_receiver.await.map_err(|e| e.to_string())?
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 
     pub(crate) async fn configure_source(
         &self,
         config: SourceConfig,
-    ) -> Result<RuntimeSchema, String> {
+    ) -> Result<RuntimeSchema, DbError> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
             .send(DbRequest::ConfigureSource {
                 config,
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
-        reply_receiver.await.map_err(|e| e.to_string())?
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 
-    pub(crate) async fn get_source(&self) -> Result<RuntimeSchema, String> {
+    pub(crate) async fn get_source(&self) -> Result<RuntimeSchema, DbError> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
             .send(DbRequest::GetSource {
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
-        reply_receiver.await.map_err(|e| e.to_string())?
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 
     pub(crate) async fn get_telemetry(
@@ -110,7 +121,7 @@ impl DbClient {
         selected_columns: Vec<String>,
         start_datetime: String,
         end_datetime: String,
-    ) -> Result<Vec<TelemetryRow>, String> {
+    ) -> Result<Vec<TelemetryRow>, DbError> {
         let (reply_sender, reply_receiver) = oneshot::channel();
         self.sender
             .send(DbRequest::ReadRange {
@@ -119,7 +130,9 @@ impl DbClient {
                 end_datetime,
                 reply: reply_sender,
             })
-            .map_err(|e| e.to_string())?;
-        reply_receiver.await.map_err(|e| e.to_string())?
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
     }
 }

@@ -34,3 +34,4 @@ rustc-ice-*.txt
 
 # User defined
 /config.json
+local-data/

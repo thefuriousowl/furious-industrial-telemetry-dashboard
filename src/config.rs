@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::error::DbError;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) enum SignalType {
     Instantaneous,
@@ -95,17 +97,17 @@ impl AppConfig {
         self.source = Some(new_source);
     }
 
-    pub(crate) async fn save_to_file(&self, path: &str) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
+    pub(crate) async fn save_to_file(&self, path: &str) -> Result<(), DbError> {
+        let json = serde_json::to_string_pretty(self).map_err(|e| DbError::Serde(e.to_string()))?;
         tokio::fs::write(path, json)
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| DbError::Io(e.to_string()))
     }
 
-    pub(crate) async fn load_from_file(path: &str) -> Result<Self, String> {
+    pub(crate) async fn load_from_file(path: &str) -> Result<Self, DbError> {
         let json = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| e.to_string())?;
-        serde_json::from_str::<AppConfig>(&json).map_err(|e| e.to_string())
+            .map_err(|e| DbError::Io(e.to_string()))?;
+        serde_json::from_str::<AppConfig>(&json).map_err(|e| DbError::Serde(e.to_string()))
     }
 }

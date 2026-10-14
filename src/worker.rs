@@ -1,4 +1,4 @@
-use crate::{db::DbReader, request::DbRequest, schema::RuntimeSchema};
+use crate::{db::DbReader, error::DbError, request::DbRequest, schema::RuntimeSchema};
 use std::sync::mpsc;
 
 const DATABASE_NOT_IN_OPEN_STATE_ERROR: &str = "database is not open";
@@ -52,7 +52,7 @@ impl DbWorker {
                 DbRequest::ListTables { reply } => {
                     println!("received ListTables");
                     let result = match self.state() {
-                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
                         DbState::Open { reader, .. } => reader.list_table(),
                     };
 
@@ -61,7 +61,7 @@ impl DbWorker {
                 DbRequest::GetColumns { table_name, reply } => {
                     println!("received GetColumns");
                     let result = match self.state() {
-                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
                         DbState::Open { reader, .. } => reader.get_columns_metadata(&table_name),
                     };
 
@@ -70,7 +70,7 @@ impl DbWorker {
                 DbRequest::ConfigureSource { config, reply } => {
                     println!("received ConfigureSource");
                     let result = match &mut self.state {
-                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
                         DbState::Open { reader, source } => {
                             match reader.discover_schema(config) {
                                 Ok(schema) => {
@@ -87,8 +87,8 @@ impl DbWorker {
                 DbRequest::GetSource { reply } => {
                     println!("received GetSource");
                     let result = match self.state() {
-                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open { source: None, .. } => Err(SOURCE_NOT_CONFIG.to_string()),
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
+                        DbState::Open { source: None, .. } => Err(DbError::SourceNotConfig),
                         DbState::Open {
                             source: Some(src), ..
                         } => Ok(src.clone()),
@@ -103,8 +103,8 @@ impl DbWorker {
                 } => {
                     println!("received ReadRange");
                     let result = match self.state() {
-                        DbState::Closed => Err(DATABASE_NOT_IN_OPEN_STATE_ERROR.to_string()),
-                        DbState::Open { source: None, .. } => Err(SOURCE_NOT_CONFIG.to_string()),
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
+                        DbState::Open { source: None, .. } => Err(DbError::SourceNotConfig),
                         DbState::Open {
                             reader,
                             source: Some(src),
@@ -124,9 +124,11 @@ impl DbWorker {
                                 .collect::<Vec<_>>();
 
                             if !mismatch_source_selected_columns.is_empty() {
-                                Err(format!(
-                                    "selected column {:#?} not found in source config",
+                                Err(DbError::SelectedColumnNotInSource(
                                     mismatch_source_selected_columns
+                                        .iter()
+                                        .map(|col| col.to_string())
+                                        .collect(),
                                 ))
                             } else {
                                 reader.get_telemetry(

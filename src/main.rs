@@ -15,6 +15,7 @@ mod client;
 mod config;
 mod db;
 mod dto;
+mod error;
 mod request;
 mod schema;
 mod sql_command;
