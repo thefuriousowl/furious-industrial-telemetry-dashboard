@@ -139,6 +139,29 @@ pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
     )
 }
 
-pub(crate) async fn fragment() -> axum::response::Html<&'static str> {
-    axum::response::Html("<p>loaded from server!</p>")
+pub(crate) async fn fragment(
+    State(app_state): State<AppState>,
+) -> axum::response::Html<String> {
+    let result = app_state
+        .db_cli()
+        .get_group_summary(
+            "Flow".to_string(),
+            "2026-08-01 00:00:00".to_string(),
+            "2026-09-01 00:00:00".to_string(),
+        )
+        .await;
+
+    let html = match result {
+        Ok(summaries) => {
+            let rows = summaries
+                .iter()
+                .map(|(group, value)| format!("<li>{group}: {value:?}</li>"))
+                .collect::<Vec<_>>()
+                .join("");
+            format!("<ul>{rows}</ul>")
+        }
+        Err(e) => format!("<p>error: {e}</p>"),
+    };
+
+    axum::response::Html(html)
 }
