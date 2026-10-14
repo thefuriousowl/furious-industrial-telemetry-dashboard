@@ -126,39 +126,61 @@ pub(crate) async fn get_group_summary(
 
 pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
     axum::response::Html(
-        "<html>
-            <head>
-                <script src=\"/static/htmx.min.js\"></script>
-                </head>
-                    <body>
-                        <h1>hello dashboard</h1>
-                        <button hx-get=\"/dashboard/fragment\" hx-target=\"#result\">Load</button>
-                        <div id=\"result\"></div>
-                    </body>
-                </html>",
+        r##"<html>
+        <head>
+            <script src="/static/htmx.min.js"></script>
+            <style>
+                .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+                .group { width: 60px; font-weight: bold; }
+                .bar-track { flex: 1; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }
+                .bar-fill { background: #2563eb; height: 100%; }
+                .value { width: 120px; text-align: right; }
+            </style>
+        </head>
+        <body>
+            <h1>hello dashboard</h1>
+            <button hx-get="/dashboard/fragment" hx-target="#result">Load</button>
+            <div id="result" hx-get="/dashboard/fragment?label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+        </body>
+    </html>"##,
     )
 }
 
 pub(crate) async fn fragment(
     State(app_state): State<AppState>,
+    Query(q): Query<GroupSummaryQuery>,
 ) -> axum::response::Html<String> {
     let result = app_state
         .db_cli()
-        .get_group_summary(
-            "Flow".to_string(),
-            "2026-08-01 00:00:00".to_string(),
-            "2026-09-01 00:00:00".to_string(),
-        )
+        .get_group_summary(q.label().into(), q.start().into(), q.end().into())
         .await;
 
     let html = match result {
-        Ok(summaries) => {
+        Ok(mut summaries) => {
+            summaries.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+            let total: f64 = summaries.iter().filter_map(|(_, v)| *v).sum();
+            let header = format!("<p><strong>Total:</strong> {total:.1}</p>");
             let rows = summaries
                 .iter()
-                .map(|(group, value)| format!("<li>{group}: {value:?}</li>"))
+                .map(|(group, value)| {
+                    match value {
+                        Some(v) => {
+                            let pct = if total > 0.0 { (v / total) * 100.0 } else { 0.0 };
+                            format!(
+                                r#"<div class="row"><span class="group">{group}</span><div class="bar-track"><div class="bar-fill" style="width: {pct:.1}%"></div></div><span class="value">{v:.1} ({pct:.1}%)</span></div>"#
+                            )
+                        }
+                        None =>
+                            format!(
+                                r#"<div class="row"><span class="group">{group}</span><span class="value">No flow</span></div>"#
+                            ),
+                    }
+                })
                 .collect::<Vec<_>>()
                 .join("");
-            format!("<ul>{rows}</ul>")
+
+            format!("{header}<div>{rows}</div>")
         }
         Err(e) => format!("<p>error: {e}</p>"),
     };
