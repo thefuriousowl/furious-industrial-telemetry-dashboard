@@ -13,6 +13,7 @@ pub(crate) enum DbError {
     DatabaseNotOpen,
     SourceNotConfig,
     EmptySelectedColumns,
+    UnsupportedOperation,
     // 500 internal error
     Sqlite(String),
     Io(String),
@@ -33,6 +34,7 @@ impl DbError {
             Self::DatabaseNotOpen => StatusCode::CONFLICT,
             Self::SourceNotConfig => StatusCode::CONFLICT,
             Self::EmptySelectedColumns => StatusCode::CONFLICT,
+            Self::UnsupportedOperation => StatusCode::CONFLICT,
             // 500 internal error
             Self::Sqlite(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -61,6 +63,9 @@ impl std::fmt::Display for DbError {
             Self::SourceNotConfig => write!(f, "source not configured"),
             Self::EmptySelectedColumns => {
                 write!(f, "empty selected_columns or empty column_name is detected")
+            }
+            Self::UnsupportedOperation => {
+                write!(f, "this operation has been not yet supported")
             }
             // 500 internal error
             Self::Sqlite(sqlite_err) => write!(f, "sql error: {sqlite_err}"),

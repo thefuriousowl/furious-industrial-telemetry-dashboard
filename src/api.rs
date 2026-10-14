@@ -5,15 +5,9 @@ use axum::{
 };
 
 use crate::{
-    DEFAULT_DASHBOARD_SUBTITLE, DEFAULT_DASHBOARD_TITLE,
-    client::AppState,
-    config::{AppConfig, SourceConfig},
-    dto::{
-        GroupSummary, GroupSummaryQuery, SignalSummaryQuery, SignalTrend, SignalTrendQuery,
-        TelemetryQuery,
-    },
-    schema::{ColumnMetaData, RuntimeSchema},
-    telemetry::TelemetryRow,
+    DEFAULT_DASHBOARD_SUBTITLE, DEFAULT_DASHBOARD_TITLE, client::AppState, config::{AppConfig, SourceConfig}, dto::{
+        GroupSummary, GroupSummaryQuery, SignalSummaryQuery, SignalTrend, SignalTrendQuery, SingleSignalQuery, TelemetryQuery,
+    }, schema::{ColumnMetaData, RuntimeSchema}, telemetry::TelemetryRow,
 };
 
 pub(crate) async fn list_table(
@@ -156,6 +150,25 @@ pub(crate) async fn get_signal_trend(
     }
 }
 
+pub(crate) async fn get_signal_peak(
+    State(app_state): State<AppState>,
+    Query(q): Query<SignalTrendQuery>,
+) -> Result<Json<Option<f64>>, (StatusCode, String)> {
+    let result = app_state
+        .db_cli()
+        .get_signal_peak(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+    match result {
+        Ok(peak) => Ok(Json(peak)),
+        Err(e) => Err((e.status_code(), e.to_string())),
+    }
+}
+
 pub(crate) async fn dashboard(State(app_state): State<AppState>) -> axum::response::Html<String> {
     let title = app_state.dashboard_title();
     let subtitle = app_state.dashboard_subtitle();
@@ -186,6 +199,10 @@ pub(crate) async fn dashboard(State(app_state): State<AppState>) -> axum::respon
             <div class="kpi-row">
                 <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
                 <div hx-get="/dashboard/kpi/total?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div hx-get="/dashboard/kpi?group=JA1&label=Pressure&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div hx-get="/dashboard/kpi?group=JA1&label=Temperature&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div hx-get="/dashboard/kpi?group=Air_Compressor&label=Dew%20point&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div hx-get="/dashboard/kpi/peak?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             </div>
             <div class="chart-row">
                 <div class="chart-col" hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
@@ -264,6 +281,32 @@ pub(crate) async fn kpi_fragment(
     axum::response::Html(html)
 }
 
+pub(crate) async fn peak_kpi_fragment(
+    State(app_state): State<AppState>,
+    Query(q): Query<SingleSignalQuery>,
+) -> axum::response::Html<String> {
+    let result = app_state
+        .db_cli()
+        .get_signal_peak(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+
+    let html = match result {
+        Ok(Some(v)) => format!(
+            r#"<div class="kpi"><div class="kpi-value">{v:.1}</div><div class="kpi-label">{}</div></div>"#,
+            "Peak flow"
+        ),
+        Ok(None) => r#"<div class="kpi"><div class="kpi-value">No data</div></div>"#.to_string(),
+        Err(e) => format!("<p>error: {e}</p>"),
+    };
+
+    axum::response::Html(html)
+}
+
 pub(crate) async fn total_kpi_fragment(
     State(app_state): State<AppState>,
     Query(q): Query<GroupSummaryQuery>,
@@ -308,16 +351,19 @@ pub(crate) async fn trend_fragment(
                 .fold(0.0_f64, f64::max);
             let bars = points
                 .iter()
-                .map(|(day, value)| match value {
-                    Some(v) => {
-                        let height_pct = if max > 0.0 { (v / max) * 100.0 } else { 0.0 };
-                        format!(
-                            r#"<div class="trend-bar" title="{day}: {v:.1}" style="height: {height_pct:.1}%"></div>"#
-                        )
+                .map(|(day, value)| {
+                    match value {
+                        Some(v) => {
+                            let height_pct = if max > 0.0 { (v / max) * 100.0 } else { 0.0 };
+                            format!(
+                                r#"<div class="trend-bar" title="{day}: {v:.1}" style="height: {height_pct:.1}%"></div>"#
+                            )
+                        }
+                        None =>
+                            format!(
+                                r#"<div class="trend-bar" title="{day}: no data" style="height: 0%"></div>"#
+                            ),
                     }
-                    None => format!(
-                        r#"<div class="trend-bar" title="{day}: no data" style="height: 0%"></div>"#
-                    ),
                 })
                 .collect::<Vec<_>>()
                 .join("");

@@ -42,6 +42,28 @@ impl SignalSummaryQuery {
 }
 
 #[derive(Deserialize)]
+pub(crate) struct SingleSignalQuery {
+    group: String,
+    label: String,
+    start: String,
+    end: String,
+}
+impl SingleSignalQuery {
+    pub(crate) fn group(&self) -> &String {
+        &self.group
+    }
+    pub(crate) fn label(&self) -> &String {
+        &self.label
+    }
+    pub(crate) fn start(&self) -> &String {
+        &self.start
+    }
+    pub(crate) fn end(&self) -> &String {
+        &self.end
+    }
+}
+
+#[derive(Deserialize)]
 pub(crate) struct GroupSummaryQuery {
     label: String,
     start: String,
@@ -104,5 +126,27 @@ impl SignalTrend {
             timestamp: pair.0,
             value: pair.1,
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SignalPeakQuery {
+    group: String,
+    label: String,
+    start: String,
+    end: String,
+}
+impl SignalPeakQuery {
+    pub(crate) fn group(&self) -> &String {
+        &self.group
+    }
+    pub(crate) fn label(&self) -> &String {
+        &self.label
+    }
+    pub(crate) fn start(&self) -> &String {
+        &self.start
+    }
+    pub(crate) fn end(&self) -> &String {
+        &self.end
     }
 }

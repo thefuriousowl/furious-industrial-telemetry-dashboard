@@ -246,6 +246,41 @@ impl DbWorker {
 
                     let _ = reply.send(result);
                 }
+                DbRequest::GetSignalPeak {
+                    group,
+                    label,
+                    start_datetime,
+                    end_datetime,
+                    reply,
+                } => {
+                    let result = match self.state() {
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
+                        DbState::Open { source: None, .. } => Err(DbError::SourceNotConfig),
+                        DbState::Open {
+                            reader,
+                            source: Some(src),
+                        } => {
+                            match src
+                                .signals()
+                                .iter()
+                                .find(|s| s.group() == group && s.label() == label)
+                            {
+                                Some(signal) => reader.get_signal_peak(
+                                    src.table_name(),
+                                    src.time_column_name(),
+                                    signal.column(),
+                                    signal.signal_type(),
+                                    &start_datetime,
+                                    &end_datetime,
+                                ),
+                                None => Err(DbError::SelectedColumnNotInSource(vec![format!(
+                                    "{group}/{label}"
+                                )])),
+                            }
+                        }
+                    };
+                    let _ = reply.send(result);
+                }
                 DbRequest::Shutdown => {
                     println!("received Shutdown");
                     break;

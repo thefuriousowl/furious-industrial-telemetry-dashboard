@@ -177,4 +177,25 @@ impl DbReader {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| DbError::Sqlite(e.to_string()))
     }
+
+    pub(crate) fn get_signal_peak(
+        &self,
+        table_name: &str,
+        expected_time_column_name: &str,
+        column: &str,
+        signal_type: &SignalType,
+        start: &str,
+        end: &str,
+    ) -> Result<Option<f64>, DbError> {
+        let sql = match signal_type {
+            SignalType::Instantaneous => format!(
+                "SELECT MAX(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2"
+            ),
+            SignalType::Counter => return Err(DbError::UnsupportedOperation), // coming soon
+        };
+
+        self.conn
+            .query_row(&sql, [start, end], |r| r.get(0))
+            .map_err(|e| DbError::Sqlite(e.to_string()))
+    }
 }

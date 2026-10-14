@@ -4,14 +4,8 @@ use axum::{Router, routing::get};
 
 use crate::{
     api::{
-        dashboard, fragment, get_group_summary, get_signal_summary, get_signal_trend, get_source,
-        kpi_fragment, list_available_columns, list_table, source, telemetry, total_kpi_fragment,
-        trend_fragment,
-    },
-    client::{AppState, DbClient},
-    config::AppConfig,
-    request::DbRequest,
-    worker::DbWorker,
+        dashboard, fragment, get_group_summary, get_signal_peak, get_signal_summary, get_signal_trend, get_source, kpi_fragment, list_available_columns, list_table, peak_kpi_fragment, source, telemetry, total_kpi_fragment, trend_fragment,
+    }, client::{AppState, DbClient}, config::AppConfig, request::DbRequest, worker::DbWorker,
 };
 
 mod api;
@@ -109,11 +103,13 @@ async fn main() -> ExitCode {
         .route("/api/signal_summary", get(get_signal_summary))
         .route("/api/group_summary", get(get_group_summary))
         .route("/api/signal_trend", get(get_signal_trend))
+        .route("/api/signal_peak", get(get_signal_peak))
         .route("/dashboard", get(dashboard))
         .route("/dashboard/fragment", get(fragment))
         .route("/dashboard/kpi", get(kpi_fragment))
         .route("/dashboard/trend", get(trend_fragment))
         .route("/dashboard/kpi/total", get(total_kpi_fragment))
+        .route("/dashboard/kpi/peak", get(peak_kpi_fragment))
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
         .with_state(app_state);
 
