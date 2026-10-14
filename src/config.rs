@@ -75,14 +75,28 @@ impl SourceConfig {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppConfig {
     db_path: String,
+    #[serde(default)]
+    dashboard_title: String,
+    #[serde(default)]
+    dashboard_subtitle: String,
     source: Option<SourceConfig>,
 }
 impl AppConfig {
-    pub(crate) fn new(db_path: &str) -> Self {
+    pub(crate) fn new(db_path: &str, dashboard_title: &str, dashboard_subtitle: &str) -> Self {
         Self {
+            dashboard_title: dashboard_title.to_string(),
+            dashboard_subtitle: dashboard_subtitle.to_string(),
             db_path: db_path.to_string(),
             source: None,
         }
+    }
+
+    pub(crate) fn dashboard_title(&self) -> &str {
+        &self.dashboard_title
+    }
+
+    pub(crate) fn dashboard_subtitle(&self) -> &str {
+        &self.dashboard_subtitle
     }
 
     pub(crate) fn db_path(&self) -> &str {

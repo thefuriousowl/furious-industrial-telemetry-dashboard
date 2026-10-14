@@ -27,6 +27,8 @@ mod worker;
 
 const CONFIG_PATH: &str = "config.json";
 const DEFAULT_DB_PATH: &str = "local-data/Database.db";
+const DEFAULT_DASHBOARD_TITLE: &str = "Compressed air consumption";
+const DEFAULT_DASHBOARD_SUBTITLE: &str = "demonstrate simple analytic dashboard";
 #[tokio::main]
 async fn main() -> ExitCode {
     // Create request channel
@@ -62,7 +64,11 @@ async fn main() -> ExitCode {
             app_config
         }
         false => {
-            let default_config = AppConfig::new(DEFAULT_DB_PATH);
+            let default_config = AppConfig::new(
+                DEFAULT_DB_PATH,
+                DEFAULT_DASHBOARD_TITLE,
+                DEFAULT_DASHBOARD_SUBTITLE,
+            );
             if let Err(e) = default_config.save_to_file(CONFIG_PATH).await {
                 eprintln!("failed to save config to file: {e}");
             }

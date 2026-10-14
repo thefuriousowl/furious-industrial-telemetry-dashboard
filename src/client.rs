@@ -12,6 +12,8 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
+    dashboard_title: String,
+    dashboard_subtitle: String,
     db_path: String,
     config_path: String,
     db_cli: DbClient,
@@ -19,6 +21,8 @@ pub(crate) struct AppState {
 impl AppState {
     pub(crate) fn from(config: AppConfig, path: &str, db_cli: DbClient) -> Self {
         Self {
+            dashboard_title: config.dashboard_title().to_string(),
+            dashboard_subtitle: config.dashboard_subtitle().to_string(),
             db_path: config.db_path().to_string(),
             config_path: path.to_string(),
             db_cli,
@@ -32,6 +36,12 @@ impl AppState {
     }
     pub(crate) fn db_cli(&self) -> &DbClient {
         &self.db_cli
+    }
+    pub(crate) fn dashboard_title(&self) -> &str {
+        &self.dashboard_title
+    }
+    pub(crate) fn dashboard_subtitle(&self) -> &str {
+        &self.dashboard_subtitle
     }
 }
 

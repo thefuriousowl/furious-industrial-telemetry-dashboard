@@ -5,6 +5,7 @@ use axum::{
 };
 
 use crate::{
+    DEFAULT_DASHBOARD_SUBTITLE, DEFAULT_DASHBOARD_TITLE,
     client::AppState,
     config::{AppConfig, SourceConfig},
     dto::{
@@ -43,7 +44,11 @@ pub(crate) async fn source(
     let result = app_state.db_cli().configure_source(req.clone()).await;
     match result {
         Ok(schema) => {
-            let mut app_config = AppConfig::new(app_state.db_path());
+            let mut app_config = AppConfig::new(
+                app_state.db_path(),
+                DEFAULT_DASHBOARD_TITLE,
+                DEFAULT_DASHBOARD_SUBTITLE,
+            );
             app_config.configure_source(req);
             if let Err(e) = app_config.save_to_file(app_state.config_path()).await {
                 eprintln!("failed to save config to disk: {e}");
@@ -151,33 +156,37 @@ pub(crate) async fn get_signal_trend(
     }
 }
 
-pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
-    axum::response::Html(
+pub(crate) async fn dashboard(State(app_state): State<AppState>) -> axum::response::Html<String> {
+    let title = app_state.dashboard_title();
+    let subtitle = app_state.dashboard_subtitle();
+    axum::response::Html(format!(
         r##"<html>
         <head>
             <script src="/static/htmx.min.js"></script>
             <style>
-                .row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-                .group { width: 60px; font-weight: bold; }
-                .bar-track { flex: 1; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }
-                .bar-fill { background: #2563eb; height: 100%; }
-                .value { width: 120px; text-align: right; }
-                .kpi { margin: 12px 0; }
-                .kpi-value { font-size: 2.5rem; font-weight: bold; }
-                .kpi-label { color: #666; }
-                .trend-chart { display: flex; align-items: flex-end; gap: 2px; height: 150px; border-bottom: 1px solid #ccc; margin: 12px 0; }
-                .trend-bar { flex: 1; background: #2563eb; min-height: 1px; }
+                .row {{ display: flex; align-items: center; gap: 8px; margin: 4px 0; }}
+                .group {{ width: 60px; font-weight: bold; }}
+                .bar-track {{ flex: 1; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }}
+                .bar-fill {{ background: #2563eb; height: 100%; }}
+                .value {{ width: 120px; text-align: right; }}
+                .kpi {{ margin: 12px 0; }}
+                .kpi-value {{ font-size: 2.5rem; font-weight: bold; }}
+                .kpi-label {{ color: #666; }}
+                .trend-chart {{ display: flex; align-items: flex-end; gap: 2px; height: 150px; border-bottom: 1px solid #ccc; margin: 12px 0; }}
+                .trend-bar {{ flex: 1; background: #2563eb; min-height: 1px; }}
             </style>
         </head>
         <body>
-            <h1>hello dashboard</h1>
+            <p>{title}</p>
+            <h1>{subtitle}</h1>
             <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
         </body>
-    </html>"##,
-    )
+    </html>"##
+    ))
 }
+
 
 pub(crate) async fn fragment(
     State(app_state): State<AppState>,
