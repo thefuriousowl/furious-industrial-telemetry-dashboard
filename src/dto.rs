@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub(crate) struct TelemetryQuery {
@@ -38,5 +38,36 @@ impl SignalSummaryQuery {
     }
     pub(crate) fn end(&self) -> &String {
         &self.end
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct GroupSummaryQuery {
+    label: String,
+    start: String,
+    end: String,
+}
+impl GroupSummaryQuery {
+    pub(crate) fn label(&self) -> &String {
+        &self.label
+    }
+    pub(crate) fn start(&self) -> &String {
+        &self.start
+    }
+    pub(crate) fn end(&self) -> &String {
+        &self.end
+    }
+}
+#[derive(Serialize)]
+pub(crate) struct GroupSummary {
+    group: String,
+    value: Option<f64>,
+}
+impl GroupSummary {
+    pub(crate) fn from(pair: (String, Option<f64>)) -> Self {
+        Self {
+            group: pair.0,
+            value: pair.1,
+        }
     }
 }

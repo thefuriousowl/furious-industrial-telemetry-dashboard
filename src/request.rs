@@ -38,5 +38,11 @@ pub(crate) enum DbRequest {
         end_datetime: String,
         reply: oneshot::Sender<Result<Option<f64>, DbError>>,
     },
+    GetGroupSummary {
+        label: String,
+        start_datetime: String,
+        end_datetime: String,
+        reply: oneshot::Sender<Result<Vec<(String, Option<f64>)>, DbError>>,
+    },
     Shutdown,
 }

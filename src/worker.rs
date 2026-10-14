@@ -1,9 +1,6 @@
 use crate::{db::DbReader, error::DbError, request::DbRequest, schema::RuntimeSchema};
 use std::sync::mpsc;
 
-const DATABASE_NOT_IN_OPEN_STATE_ERROR: &str = "database is not open";
-const SOURCE_NOT_CONFIG: &str = "source is not configured";
-
 pub(crate) enum DbState {
     Closed,
     Open {
@@ -176,6 +173,39 @@ impl DbWorker {
                                 )])),
                             }
                         }
+                    };
+                    let _ = reply.send(result);
+                }
+                DbRequest::GetGroupSummary {
+                    label,
+                    start_datetime,
+                    end_datetime,
+                    reply,
+                } => {
+                    println!("received GetGroupSummary");
+                    let result = match self.state() {
+                        DbState::Closed => Err(DbError::DatabaseNotOpen),
+                        DbState::Open { source: None, .. } => Err(DbError::SourceNotConfig),
+                        DbState::Open {
+                            reader,
+                            source: Some(src),
+                        } => src
+                            .signals()
+                            .iter()
+                            .filter(|s| s.label() == label)
+                            .map(|signal| {
+                                reader
+                                    .get_signal_summary(
+                                        src.table_name(),
+                                        src.time_column_name(),
+                                        signal.column(),
+                                        signal.signal_type(),
+                                        &start_datetime,
+                                        &end_datetime,
+                                    )
+                                    .map(|value| (signal.group().to_string(), value))
+                            })
+                            .collect::<Result<Vec<_>, DbError>>(),
                     };
                     let _ = reply.send(result);
                 }

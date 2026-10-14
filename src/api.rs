@@ -7,7 +7,7 @@ use axum::{
 use crate::{
     client::AppState,
     config::{AppConfig, SourceConfig},
-    dto::{SignalSummaryQuery, TelemetryQuery},
+    dto::{GroupSummary, GroupSummaryQuery, SignalSummaryQuery, TelemetryQuery},
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,
 };
@@ -101,6 +101,25 @@ pub(crate) async fn get_signal_summary(
         .await;
     match result {
         Ok(summary) => Ok(Json(summary)),
+        Err(e) => Err((e.status_code(), e.to_string())),
+    }
+}
+
+pub(crate) async fn get_group_summary(
+    State(app_state): State<AppState>,
+    Query(q): Query<GroupSummaryQuery>,
+) -> Result<Json<Vec<GroupSummary>>, (StatusCode, String)> {
+    let result = app_state
+        .db_cli()
+        .get_group_summary(q.label().into(), q.start().into(), q.end().into())
+        .await;
+    match result {
+        Ok(summary) => Ok(Json(
+            summary
+                .into_iter()
+                .map(|pair| GroupSummary::from(pair))
+                .collect::<Vec<GroupSummary>>(),
+        )),
         Err(e) => Err((e.status_code(), e.to_string())),
     }
 }

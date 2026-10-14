@@ -3,7 +3,10 @@ use std::{process::ExitCode, sync::mpsc, thread};
 use axum::{Router, routing::get};
 
 use crate::{
-    api::{get_signal_summary, get_source, list_available_columns, list_table, source, telemetry},
+    api::{
+        get_group_summary, get_signal_summary, get_source, list_available_columns, list_table,
+        source, telemetry,
+    },
     client::{AppState, DbClient},
     config::AppConfig,
     request::DbRequest,
@@ -97,6 +100,7 @@ async fn main() -> ExitCode {
         .route("/api/source", get(get_source).post(source))
         .route("/api/telemetry", get(telemetry))
         .route("/api/signal_summary", get(get_signal_summary))
+        .route("/api/group_summary", get(get_group_summary))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
