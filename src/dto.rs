@@ -71,3 +71,38 @@ impl GroupSummary {
         }
     }
 }
+
+#[derive(Deserialize)]
+pub(crate) struct SignalTrendQuery {
+    group: String,
+    label: String,
+    start: String,
+    end: String,
+}
+impl SignalTrendQuery {
+    pub(crate) fn group(&self) -> &String {
+        &self.group
+    }
+    pub(crate) fn label(&self) -> &String {
+        &self.label
+    }
+    pub(crate) fn start(&self) -> &String {
+        &self.start
+    }
+    pub(crate) fn end(&self) -> &String {
+        &self.end
+    }
+}
+#[derive(Serialize)]
+pub(crate) struct SignalTrend {
+    timestamp: String,
+    value: Option<f64>,
+}
+impl SignalTrend {
+    pub(crate) fn from(pair: (String, Option<f64>)) -> Self {
+        Self {
+            timestamp: pair.0,
+            value: pair.1,
+        }
+    }
+}

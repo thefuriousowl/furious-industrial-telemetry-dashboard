@@ -4,8 +4,8 @@ use axum::{Router, routing::get};
 
 use crate::{
     api::{
-        dashboard, fragment, get_group_summary, get_signal_summary, get_source, kpi_fragment,
-        list_available_columns, list_table, source, telemetry,
+        dashboard, fragment, get_group_summary, get_signal_summary, get_signal_trend, get_source,
+        kpi_fragment, list_available_columns, list_table, source, telemetry, trend_fragment,
     },
     client::{AppState, DbClient},
     config::AppConfig,
@@ -101,9 +101,11 @@ async fn main() -> ExitCode {
         .route("/api/telemetry", get(telemetry))
         .route("/api/signal_summary", get(get_signal_summary))
         .route("/api/group_summary", get(get_group_summary))
+        .route("/api/signal_trend", get(get_signal_trend))
         .route("/dashboard", get(dashboard))
         .route("/dashboard/fragment", get(fragment))
         .route("/dashboard/kpi", get(kpi_fragment))
+        .route("/dashboard/trend", get(trend_fragment))
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
         .with_state(app_state);
 

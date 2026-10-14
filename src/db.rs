@@ -148,4 +148,33 @@ impl DbReader {
             .query_row(&sql, [start, end], |r| r.get(0))
             .map_err(|e| DbError::Sqlite(e.to_string()))
     }
+
+    pub(crate) fn get_signal_trend(
+        &self,
+        table_name: &str,
+        expected_time_column_name: &str,
+        column: &str,
+        signal_type: &SignalType,
+        start: &str,
+        end: &str,
+    ) -> Result<Vec<(String, Option<f64>)>, DbError> {
+        let sql = match signal_type {
+            SignalType::Instantaneous => format!(
+                "SELECT date(\"{expected_time_column_name}\"), AVG(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2 GROUP BY date(\"{expected_time_column_name}\")"
+            ),
+            SignalType::Counter => format!(
+                "SELECT date(\"{expected_time_column_name}\"), MAX(\"{column}\") - MIN(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" < ?2 GROUP BY date(\"{expected_time_column_name}\")"
+            ),
+        };
+        let mut stmt = self
+            .conn
+            .prepare(&sql)
+            .map_err(|e| DbError::Sqlite(e.to_string()))?;
+        let rows = stmt
+            .query_map([start, end], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map_err(|e| DbError::Sqlite(e.to_string()))?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| DbError::Sqlite(e.to_string()))
+    }
 }

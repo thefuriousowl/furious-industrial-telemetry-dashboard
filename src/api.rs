@@ -7,7 +7,10 @@ use axum::{
 use crate::{
     client::AppState,
     config::{AppConfig, SourceConfig},
-    dto::{GroupSummary, GroupSummaryQuery, SignalSummaryQuery, TelemetryQuery},
+    dto::{
+        GroupSummary, GroupSummaryQuery, SignalSummaryQuery, SignalTrend, SignalTrendQuery,
+        TelemetryQuery,
+    },
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,
 };
@@ -124,6 +127,30 @@ pub(crate) async fn get_group_summary(
     }
 }
 
+pub(crate) async fn get_signal_trend(
+    State(app_state): State<AppState>,
+    Query(q): Query<SignalTrendQuery>,
+) -> Result<Json<Vec<SignalTrend>>, (StatusCode, String)> {
+    let result = app_state
+        .db_cli()
+        .get_signal_trend(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+    match result {
+        Ok(trend) => Ok(Json(
+            trend
+                .into_iter()
+                .map(|pair| SignalTrend::from(pair))
+                .collect::<Vec<SignalTrend>>(),
+        )),
+        Err(e) => Err((e.status_code(), e.to_string())),
+    }
+}
+
 pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
     axum::response::Html(
         r##"<html>
@@ -138,12 +165,15 @@ pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
                 .kpi { margin: 12px 0; }
                 .kpi-value { font-size: 2.5rem; font-weight: bold; }
                 .kpi-label { color: #666; }
+                .trend-chart { display: flex; align-items: flex-end; gap: 2px; height: 150px; border-bottom: 1px solid #ccc; margin: 12px 0; }
+                .trend-bar { flex: 1; background: #2563eb; min-height: 1px; }
             </style>
         </head>
         <body>
             <h1>hello dashboard</h1>
             <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            <div hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
         </body>
     </html>"##,
     )
@@ -211,6 +241,49 @@ pub(crate) async fn kpi_fragment(
             q.label()
         ),
         Ok(None) => r#"<div class="kpi"><div class="kpi-value">No data</div></div>"#.to_string(),
+        Err(e) => format!("<p>error: {e}</p>"),
+    };
+
+    axum::response::Html(html)
+}
+
+pub(crate) async fn trend_fragment(
+    State(app_state): State<AppState>,
+    Query(q): Query<SignalTrendQuery>,
+) -> axum::response::Html<String> {
+    let result = app_state
+        .db_cli()
+        .get_signal_trend(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+
+    let html = match result {
+        Ok(points) => {
+            let max = points
+                .iter()
+                .filter_map(|(_, v)| *v)
+                .fold(0.0_f64, f64::max);
+            let bars = points
+                .iter()
+                .map(|(day, value)| match value {
+                    Some(v) => {
+                        let height_pct = if max > 0.0 { (v / max) * 100.0 } else { 0.0 };
+                        format!(
+                            r#"<div class="trend-bar" title="{day}: {v:.1}" style="height: {height_pct:.1}%"></div>"#
+                        )
+                    }
+                    None => format!(
+                        r#"<div class="trend-bar" title="{day}: no data" style="height: 0%"></div>"#
+                    ),
+                })
+                .collect::<Vec<_>>()
+                .join("");
+            format!(r#"<div class="trend-chart">{bars}</div>"#)
+        }
         Err(e) => format!("<p>error: {e}</p>"),
     };
 
