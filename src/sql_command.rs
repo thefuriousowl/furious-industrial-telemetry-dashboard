@@ -53,15 +53,15 @@ mod tests {
     fn sample_metadata() -> Vec<ColumnMetaData> {
         vec![
             ColumnMetaData::new("Time".to_string(), "datetime".to_string()),
-            ColumnMetaData::new("JA1_Flow".to_string(), "REAL".to_string()),
-            ColumnMetaData::new("JA1_Pressure".to_string(), "REAL".to_string()),
+            ColumnMetaData::new("Furnace_Flow".to_string(), "REAL".to_string()),
+            ColumnMetaData::new("Furnace_Pressure".to_string(), "REAL".to_string()),
         ]
     }
 
     #[test]
     fn all_selected_column_exists_in_metadata() {
-        let expected_sql = "SELECT \"Time\", \"JA1_Flow\", \"JA1_Pressure\" FROM \"DataLogger1\" WHERE \"Time\" >= ?1 AND \"Time\" < ?2 ORDER BY \"Time\" ASC";
-        let valid_selected_columns = ["JA1_Flow".to_string(), "JA1_Pressure".to_string()];
+        let expected_sql = "SELECT \"Time\", \"Furnace_Flow\", \"Furnace_Pressure\" FROM \"DataLogger1\" WHERE \"Time\" >= ?1 AND \"Time\" < ?2 ORDER BY \"Time\" ASC";
+        let valid_selected_columns = ["Furnace_Flow".to_string(), "Furnace_Pressure".to_string()];
         let result = get_query_string(
             "DataLogger1",
             "Time",
@@ -86,7 +86,7 @@ mod tests {
 
     #[test]
     fn reject_empty_string_in_selected_columns() {
-        let selected_columns_contains_empty_string = ["JA1_Flow".to_string(), "".to_string()];
+        let selected_columns_contains_empty_string = ["Furnace_Flow".to_string(), "".to_string()];
         let result = get_query_string(
             "DataLogger1",
             "Time",
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn reject_column_name_not_in_metadata() {
         let selected_columns_contains_mismatch_column_name =
-            ["JA1_Flow".to_string(), "Nope".to_string()];
+            ["Furnace_Flow".to_string(), "Nope".to_string()];
         let result = get_query_string(
             "DataLogger1",
             "Time",
@@ -111,7 +111,7 @@ mod tests {
 
     #[test]
     fn reject_missing_time_column() {
-        let valid_selected_columns = ["JA1_Flow".to_string(), "JA1_Pressure".to_string()];
+        let valid_selected_columns = ["Furnace_Flow".to_string(), "Furnace_Pressure".to_string()];
         let result = get_query_string(
             "DataLogger1",
             "Timeeeeeeeeeeeeeeeee",

@@ -135,4 +135,26 @@ impl DbClient {
             .await
             .map_err(|e| DbError::Channel(e.to_string()))?
     }
+
+    pub(crate) async fn get_signal_summary(
+        &self,
+        group: String,
+        label: String,
+        start_datetime: String,
+        end_datetime: String,
+    ) -> Result<Option<f64>, DbError> {
+        let (reply_sender, reply_receiver) = oneshot::channel();
+        self.sender
+            .send(DbRequest::GetSignalSummary {
+                group,
+                label,
+                start_datetime,
+                end_datetime,
+                reply: reply_sender,
+            })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
 }

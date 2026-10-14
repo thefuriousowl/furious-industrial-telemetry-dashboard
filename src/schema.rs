@@ -120,3 +120,127 @@ impl RuntimeSchema {
         &self.signals
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        config::{SignalConfig, SignalType},
+        error::DbError,
+        schema::{ColumnMetaData, RuntimeSchema},
+    };
+    fn sample_metadata() -> Vec<ColumnMetaData> {
+        vec![
+            ColumnMetaData::new("Time".to_string(), "datetime".to_string()),
+            ColumnMetaData::new("Furnace_Flow".to_string(), "REAL".to_string()),
+            ColumnMetaData::new("Furnace_Pressure".to_string(), "REAL".to_string()),
+        ]
+    }
+
+    fn sample_signals() -> Vec<SignalConfig> {
+        vec![
+            SignalConfig::new("Furnace_Flow", "Furnace", "Flow", SignalType::Instantaneous),
+            SignalConfig::new(
+                "Furnace_Pressure",
+                "Furnace",
+                "Pressure",
+                SignalType::Instantaneous,
+            ),
+        ]
+    }
+
+    #[test]
+    fn rejects_expected_time_column_not_found() {
+        let expected_time_column_name = String::from("datetime");
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            sample_signals(),
+        );
+        assert!(matches!(result, Err(DbError::ColumnNotFound(..))))
+    }
+
+    #[test]
+    fn rejects_duplicate_signal_column_name() {
+        let expected_time_column_name = String::from("Time");
+        let mut duplicated_signals = sample_signals();
+        duplicated_signals.push(SignalConfig::new(
+            "Furnace_Flow",
+            "Furnace",
+            "Someshit",
+            SignalType::Instantaneous,
+        ));
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            duplicated_signals,
+        );
+        assert!(matches!(result, Err(DbError::DuplicateColumn(..))))
+    }
+
+    #[test]
+    fn rejects_duplicate_group_label_pair() {
+        let expected_time_column_name = String::from("Time");
+        let mut duplicated_group_label_pair_signals = sample_signals();
+        duplicated_group_label_pair_signals[1] = SignalConfig::new(
+            "Furnace_Pressure",
+            "Furnace",
+            "Flow",
+            SignalType::Instantaneous,
+        );
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            duplicated_group_label_pair_signals,
+        );
+        assert!(matches!(result, Err(DbError::DuplicateGroupLabel(..))))
+    }
+
+    #[test]
+    fn rejects_empty_signal() {
+        let expected_time_column_name = String::from("Time");
+        let empty_signals = vec![];
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            empty_signals,
+        );
+
+        assert!(matches!(result, Err(DbError::EmptySignals)))
+    }
+
+    #[test]
+    fn rejects_signal_mismatch_from_metadata() {
+        let expected_time_column_name = String::from("Time");
+        let mut mismatch_signals = sample_signals();
+        mismatch_signals.push(SignalConfig::new(
+            "Mismatch_Signal",
+            "Furnace",
+            "Totalizer",
+            SignalType::Instantaneous,
+        ));
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            mismatch_signals,
+        );
+
+        assert!(matches!(result, Err(DbError::ColumnNotFound(..))))
+    }
+
+    #[test]
+    fn accepts_valid() {
+        let expected_time_column_name = String::from("Time");
+        let result = RuntimeSchema::generate_from(
+            "DataLogger1".to_string(),
+            sample_metadata(),
+            expected_time_column_name,
+            sample_signals(),
+        );
+        assert!(matches!(result, Ok(..)))
+    }
+}

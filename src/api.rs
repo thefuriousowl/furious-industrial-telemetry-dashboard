@@ -7,7 +7,7 @@ use axum::{
 use crate::{
     client::AppState,
     config::{AppConfig, SourceConfig},
-    dto::TelemetryQuery,
+    dto::{SignalSummaryQuery, TelemetryQuery},
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,
 };
@@ -82,6 +82,25 @@ pub(crate) async fn telemetry(
         .await;
     match result {
         Ok(telemetry) => Ok(Json(telemetry)),
+        Err(e) => Err((e.status_code(), e.to_string())),
+    }
+}
+
+pub(crate) async fn get_signal_summary(
+    State(app_state): State<AppState>,
+    Query(q): Query<SignalSummaryQuery>,
+) -> Result<Json<Option<f64>>, (StatusCode, String)> {
+    let result = app_state
+        .db_cli()
+        .get_signal_summary(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+    match result {
+        Ok(summary) => Ok(Json(summary)),
         Err(e) => Err((e.status_code(), e.to_string())),
     }
 }

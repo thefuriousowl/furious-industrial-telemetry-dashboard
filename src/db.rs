@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use rusqlite::{Connection, OpenFlags};
 
 use crate::{
-    config::SourceConfig,
+    config::{SignalType, SourceConfig},
     error::DbError,
     schema::{ColumnMetaData, RuntimeSchema},
     sql_command::{LIST_AVAILABLE_COLUMNS, LIST_AVAILABLE_TABLE, get_query_string},
@@ -124,5 +124,28 @@ impl DbReader {
         }
 
         Ok(output)
+    }
+
+    pub(crate) fn get_signal_summary(
+        &self,
+        table_name: &str,
+        expected_time_column_name: &str,
+        column: &str,
+        signal_type: &SignalType,
+        start: &str,
+        end: &str,
+    ) -> Result<Option<f64>, DbError> {
+        let sql = match signal_type {
+            SignalType::Instantaneous => format!(
+                "SELECT AVG(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2"
+            ),
+            SignalType::Counter => format!(
+                "SELECT MAX(\"{column}\") - MIN(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" < ?2"
+            ),
+        };
+
+        self.conn
+            .query_row(&sql, [start, end], |r| r.get(0))
+            .map_err(|e| DbError::Sqlite(e.to_string()))
     }
 }
