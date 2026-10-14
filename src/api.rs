@@ -180,13 +180,13 @@ pub(crate) async fn dashboard(State(app_state): State<AppState>) -> axum::respon
             <p>{title}</p>
             <h1>{subtitle}</h1>
             <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            <div hx-get="/dashboard/kpi/total?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
         </body>
     </html>"##
     ))
 }
-
 
 pub(crate) async fn fragment(
     State(app_state): State<AppState>,
@@ -250,6 +250,28 @@ pub(crate) async fn kpi_fragment(
             q.label()
         ),
         Ok(None) => r#"<div class="kpi"><div class="kpi-value">No data</div></div>"#.to_string(),
+        Err(e) => format!("<p>error: {e}</p>"),
+    };
+
+    axum::response::Html(html)
+}
+
+pub(crate) async fn total_kpi_fragment(
+    State(app_state): State<AppState>,
+    Query(q): Query<GroupSummaryQuery>,
+) -> axum::response::Html<String> {
+    let result = app_state
+        .db_cli()
+        .get_group_summary(q.label().into(), q.start().into(), q.end().into())
+        .await;
+
+    let html = match result {
+        Ok(summaries) => {
+            let total: f64 = summaries.iter().filter_map(|(_, v)| *v).sum();
+            format!(
+                r#"<div class="kpi"><div class="kpi-value">{total:.1}</div><div class="kpi-label">Total consumption</div></div>"#
+            )
+        }
         Err(e) => format!("<p>error: {e}</p>"),
     };
 
