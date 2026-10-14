@@ -166,23 +166,31 @@ pub(crate) async fn dashboard(State(app_state): State<AppState>) -> axum::respon
             <style>
                 .row {{ display: flex; align-items: center; gap: 8px; margin: 4px 0; }}
                 .group {{ width: 60px; font-weight: bold; }}
-                .bar-track {{ flex: 1; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }}
+                .bar-track {{ flex: 1; min-width: 40px; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }}
                 .bar-fill {{ background: #2563eb; height: 100%; }}
-                .value {{ width: 120px; text-align: right; }}
-                .kpi {{ margin: 12px 0; }}
+                .value {{ width: 90px; text-align: right; }}
+                .kpi {{ margin: 0; }}
                 .kpi-value {{ font-size: 2.5rem; font-weight: bold; }}
                 .kpi-label {{ color: #666; }}
                 .trend-chart {{ display: flex; align-items: flex-end; gap: 2px; height: 150px; border-bottom: 1px solid #ccc; margin: 12px 0; }}
                 .trend-bar {{ flex: 1; background: #2563eb; min-height: 1px; }}
+                .kpi-row {{ display: flex; gap: 24px; flex-wrap: wrap; margin: 16px 0; }}
+                .kpi-row > div {{ background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px 16px; }}
+                .chart-row {{ display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin: 16px 0; }}
+                .chart-col {{ background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 12px 16px; }}
             </style>
         </head>
         <body>
             <p>{title}</p>
             <h1>{subtitle}</h1>
-            <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
-            <div hx-get="/dashboard/kpi/total?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
-            <div id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
-            <div hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            <div class="kpi-row">
+                <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div hx-get="/dashboard/kpi/total?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            </div>
+            <div class="chart-row">
+                <div class="chart-col" hx-get="/dashboard/trend?group=JA1&label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+                <div class="chart-col" id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            </div>
         </body>
     </html>"##
     ))
