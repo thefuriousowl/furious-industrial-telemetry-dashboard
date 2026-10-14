@@ -46,6 +46,30 @@ impl RuntimeSchema {
             ));
         }
 
+        let mut seen_columns = std::collections::HashSet::new();
+        let mut seen_group_label = std::collections::HashSet::new();
+
+        let mut duplicated_columns = vec![];
+        let mut duplicated_group_label = vec![];
+
+        for signal in &signals {
+            if !seen_columns.insert(signal.column()) {
+                duplicated_columns.push(signal.column());
+            }
+            if !seen_group_label.insert((signal.group(), signal.label())) {
+                duplicated_group_label.push((signal.group(), signal.label()));
+            }
+        }
+
+        if !duplicated_columns.is_empty() {
+            return Err(format!("duplicated columns found: {duplicated_columns:?}"));
+        }
+        if !duplicated_group_label.is_empty() {
+            return Err(format!(
+                "duplicated group-label pair found: {duplicated_group_label:?}"
+            ));
+        }
+
         if signals.is_empty() {
             return Err(format!("signals must not be empty"));
         }

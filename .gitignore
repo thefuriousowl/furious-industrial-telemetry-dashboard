@@ -31,3 +31,6 @@ rustc-ice-*.txt
 *.tmp
 *.temp
 *~
+
+# User defined
+/config.json

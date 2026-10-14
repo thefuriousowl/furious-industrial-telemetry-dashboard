@@ -69,25 +69,25 @@ impl DbReader {
 
     pub(crate) fn discover_schema(&self, config: SourceConfig) -> Result<RuntimeSchema, String> {
         let current_column_metadata = self
-            .get_columns_metadata(&config.table_name)
+            .get_columns_metadata(&config.table_name())
             .map_err(|e| e.to_string())?;
 
         let time_column_exists = current_column_metadata
             .iter()
-            .any(|metadata| metadata.name() == config.time_column_name);
+            .any(|metadata| metadata.name() == config.time_column_name());
 
         if !time_column_exists {
             return Err(format!(
                 "Discover schema error: {} column does not exists",
-                config.time_column_name
+                config.time_column_name()
             ));
         }
 
         RuntimeSchema::generate_from(
-            config.table_name,
+            config.table_name().to_string(),
             current_column_metadata,
-            config.time_column_name,
-            config.signals,
+            config.time_column_name().to_string(),
+            config.signals().to_vec(),
         )
         .map_err(|e| e.to_string())
     }

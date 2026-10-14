@@ -3,11 +3,36 @@ use std::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::{
-    config::SourceConfig,
+    config::{AppConfig, SourceConfig},
     request::DbRequest,
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::TelemetryRow,
 };
+
+#[derive(Debug, Clone)]
+pub(crate) struct AppState {
+    db_path: String,
+    config_path: String,
+    db_cli: DbClient,
+}
+impl AppState {
+    pub(crate) fn from(config: AppConfig, path: &str, db_cli: DbClient) -> Self {
+        Self {
+            db_path: config.db_path().to_string(),
+            config_path: path.to_string(),
+            db_cli,
+        }
+    }
+    pub(crate) fn db_path(&self) -> &str {
+        &self.db_path
+    }
+    pub(crate) fn config_path(&self) -> &str {
+        &self.config_path
+    }
+    pub(crate) fn db_cli(&self) -> &DbClient {
+        &self.db_cli
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct DbClient {
@@ -70,11 +95,13 @@ impl DbClient {
         reply_receiver.await.map_err(|e| e.to_string())?
     }
 
-    pub(crate) async fn get_source(
-        &self
-    ) -> Result<RuntimeSchema, String> {
+    pub(crate) async fn get_source(&self) -> Result<RuntimeSchema, String> {
         let (reply_sender, reply_receiver) = oneshot::channel();
-        self.sender.send(DbRequest::GetSource { reply: reply_sender }).map_err(|e| e.to_string())?;
+        self.sender
+            .send(DbRequest::GetSource {
+                reply: reply_sender,
+            })
+            .map_err(|e| e.to_string())?;
         reply_receiver.await.map_err(|e| e.to_string())?
     }
 
