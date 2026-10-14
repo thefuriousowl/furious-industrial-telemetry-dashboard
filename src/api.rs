@@ -123,3 +123,22 @@ pub(crate) async fn get_group_summary(
         Err(e) => Err((e.status_code(), e.to_string())),
     }
 }
+
+pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
+    axum::response::Html(
+        "<html>
+            <head>
+                <script src=\"/static/htmx.min.js\"></script>
+                </head>
+                    <body>
+                        <h1>hello dashboard</h1>
+                        <button hx-get=\"/dashboard/fragment\" hx-target=\"#result\">Load</button>
+                        <div id=\"result\"></div>
+                    </body>
+                </html>",
+    )
+}
+
+pub(crate) async fn fragment() -> axum::response::Html<&'static str> {
+    axum::response::Html("<p>loaded from server!</p>")
+}
