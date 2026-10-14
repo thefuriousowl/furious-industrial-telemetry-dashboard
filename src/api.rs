@@ -143,7 +143,7 @@ pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
         <body>
             <h1>hello dashboard</h1>
             <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
-            <div id="result" hx-get="/dashboard/fragment?label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
+            <div id="result" hx-get="/dashboard/fragment?label=Total&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
         </body>
     </html>"##,
     )
