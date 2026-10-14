@@ -135,11 +135,14 @@ pub(crate) async fn dashboard() -> axum::response::Html<&'static str> {
                 .bar-track { flex: 1; background: #eee; height: 16px; border-radius: 4px; overflow: hidden; }
                 .bar-fill { background: #2563eb; height: 100%; }
                 .value { width: 120px; text-align: right; }
+                .kpi { margin: 12px 0; }
+                .kpi-value { font-size: 2.5rem; font-weight: bold; }
+                .kpi-label { color: #666; }
             </style>
         </head>
         <body>
             <h1>hello dashboard</h1>
-            <button hx-get="/dashboard/fragment" hx-target="#result">Load</button>
+            <div hx-get="/dashboard/kpi?group=JA1&label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
             <div id="result" hx-get="/dashboard/fragment?label=Flow&start=2026-08-01%2000:00:00&end=2026-09-01%2000:00:00" hx-trigger="load"></div>
         </body>
     </html>"##,
@@ -182,6 +185,32 @@ pub(crate) async fn fragment(
 
             format!("{header}<div>{rows}</div>")
         }
+        Err(e) => format!("<p>error: {e}</p>"),
+    };
+
+    axum::response::Html(html)
+}
+
+pub(crate) async fn kpi_fragment(
+    State(app_state): State<AppState>,
+    Query(q): Query<SignalSummaryQuery>,
+) -> axum::response::Html<String> {
+    let result = app_state
+        .db_cli()
+        .get_signal_summary(
+            q.group().into(),
+            q.label().into(),
+            q.start().into(),
+            q.end().into(),
+        )
+        .await;
+
+    let html = match result {
+        Ok(Some(v)) => format!(
+            r#"<div class="kpi"><div class="kpi-value">{v:.1}</div><div class="kpi-label">{}</div></div>"#,
+            q.label()
+        ),
+        Ok(None) => r#"<div class="kpi"><div class="kpi-value">No data</div></div>"#.to_string(),
         Err(e) => format!("<p>error: {e}</p>"),
     };
 
