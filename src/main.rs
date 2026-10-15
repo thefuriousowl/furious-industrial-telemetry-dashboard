@@ -4,8 +4,14 @@ use axum::{Router, routing::get};
 
 use crate::{
     api::{
-        dashboard, fragment, get_group_summary, get_signal_peak, get_signal_summary, get_signal_trend, get_source, kpi_fragment, list_available_columns, list_table, peak_kpi_fragment, source, telemetry, total_kpi_fragment, trend_fragment,
-    }, client::{AppState, DbClient}, config::AppConfig, request::DbRequest, worker::DbWorker,
+        dashboard, fragment, get_group_summary, get_signal_peak, get_signal_summary,
+        get_signal_trend, get_source, kpi_fragment, list_available_columns, list_table,
+        peak_kpi_fragment, source, telemetry, total_kpi_fragment, trend_fragment,
+    },
+    client::{AppState, DbClient},
+    config::AppConfig,
+    request::DbRequest,
+    worker::DbWorker,
 };
 
 mod api;

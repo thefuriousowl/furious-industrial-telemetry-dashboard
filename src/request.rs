@@ -4,7 +4,7 @@ use crate::{
     config::SourceConfig,
     error::DbError,
     schema::{ColumnMetaData, RuntimeSchema},
-    telemetry::TelemetryRow,
+    telemetry::{TelemetryRow, TrendBucket},
 };
 pub(crate) enum DbRequest {
     OpenDatabase {
@@ -49,6 +49,7 @@ pub(crate) enum DbRequest {
         label: String,
         start_datetime: String,
         end_datetime: String,
+        bucket: TrendBucket,
         reply: oneshot::Sender<Result<Vec<(String, Option<f64>)>, DbError>>,
     },
     GetSignalPeak {

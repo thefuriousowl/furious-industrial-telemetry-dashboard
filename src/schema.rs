@@ -138,11 +138,18 @@ mod tests {
 
     fn sample_signals() -> Vec<SignalConfig> {
         vec![
-            SignalConfig::new("Furnace_Flow", "Furnace", "Flow", SignalType::Instantaneous),
+            SignalConfig::new(
+                "Furnace_Flow",
+                "Furnace",
+                "Flow",
+                "m³/h",
+                SignalType::Instantaneous,
+            ),
             SignalConfig::new(
                 "Furnace_Pressure",
                 "Furnace",
                 "Pressure",
+                "hPa",
                 SignalType::Instantaneous,
             ),
         ]
@@ -152,7 +159,7 @@ mod tests {
     fn rejects_expected_time_column_not_found() {
         let expected_time_column_name = String::from("datetime");
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             sample_signals(),
@@ -168,10 +175,11 @@ mod tests {
             "Furnace_Flow",
             "Furnace",
             "Someshit",
+            "unit",
             SignalType::Instantaneous,
         ));
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             duplicated_signals,
@@ -187,10 +195,11 @@ mod tests {
             "Furnace_Pressure",
             "Furnace",
             "Flow",
+            "m³/h",
             SignalType::Instantaneous,
         );
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             duplicated_group_label_pair_signals,
@@ -203,7 +212,7 @@ mod tests {
         let expected_time_column_name = String::from("Time");
         let empty_signals = vec![];
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             empty_signals,
@@ -220,10 +229,11 @@ mod tests {
             "Mismatch_Signal",
             "Furnace",
             "Totalizer",
+            "m³",
             SignalType::Instantaneous,
         ));
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             mismatch_signals,
@@ -236,7 +246,7 @@ mod tests {
     fn accepts_valid() {
         let expected_time_column_name = String::from("Time");
         let result = RuntimeSchema::generate_from(
-            "DataLogger1".to_string(),
+            "telemetry_samples".to_string(),
             sample_metadata(),
             expected_time_column_name,
             sample_signals(),

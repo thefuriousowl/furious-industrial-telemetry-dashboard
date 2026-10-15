@@ -7,7 +7,7 @@ use crate::{
     error::DbError,
     schema::{ColumnMetaData, RuntimeSchema},
     sql_command::{LIST_AVAILABLE_COLUMNS, LIST_AVAILABLE_TABLE, get_query_string},
-    telemetry::TelemetryRow,
+    telemetry::{TelemetryRow, TrendBucket},
 };
 
 pub(crate) struct DbReader {
@@ -155,15 +155,33 @@ impl DbReader {
         expected_time_column_name: &str,
         column: &str,
         signal_type: &SignalType,
+        bucket: &TrendBucket,
         start: &str,
         end: &str,
     ) -> Result<Vec<(String, Option<f64>)>, DbError> {
+        let bucket_map = match bucket {
+            TrendBucket::Hour => {
+                format!(r#"strftime('%Y-%m-%d %H:00:00', "{expected_time_column_name}")"#)
+            }
+            TrendBucket::Day => format!(r#"date("{expected_time_column_name}")"#),
+            TrendBucket::Month => format!(r#"strftime('%Y-%m-01', "{expected_time_column_name}")"#),
+        };
         let sql = match signal_type {
             SignalType::Instantaneous => format!(
-                "SELECT date(\"{expected_time_column_name}\"), AVG(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2 GROUP BY date(\"{expected_time_column_name}\")"
+                r#"SELECT {bucket_map}, AVG("{column}")
+            FROM "{table_name}"
+            WHERE "{expected_time_column_name}" >= ?1
+            AND "{expected_time_column_name}" < ?2
+            GROUP BY {bucket_map}
+            ORDER BY {bucket_map} ASC"#
             ),
             SignalType::Counter => format!(
-                "SELECT date(\"{expected_time_column_name}\"), MAX(\"{column}\") - MIN(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" < ?2 GROUP BY date(\"{expected_time_column_name}\")"
+                r#"SELECT {bucket_map}, MAX("{column}") - MIN("{column}")
+            FROM "{table_name}"
+            WHERE "{expected_time_column_name}" >= ?1
+            AND "{expected_time_column_name}" < ?2
+            GROUP BY {bucket_map}
+            ORDER BY {bucket_map} ASC"#
             ),
         };
         let mut stmt = self
@@ -191,7 +209,9 @@ impl DbReader {
             SignalType::Instantaneous => format!(
                 "SELECT MAX(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2"
             ),
-            SignalType::Counter => return Err(DbError::UnsupportedOperation), // coming soon
+            SignalType::Counter => {
+                return Err(DbError::UnsupportedOperation);
+            } // coming soon
         };
 
         self.conn

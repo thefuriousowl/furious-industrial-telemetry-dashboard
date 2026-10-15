@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::telemetry::TrendBucket;
+
 #[derive(Deserialize)]
 pub(crate) struct TelemetryQuery {
     columns: String,
@@ -98,6 +100,7 @@ impl GroupSummary {
 pub(crate) struct SignalTrendQuery {
     group: String,
     label: String,
+    bucket: TrendBucket,
     start: String,
     end: String,
 }
@@ -107,6 +110,9 @@ impl SignalTrendQuery {
     }
     pub(crate) fn label(&self) -> &String {
         &self.label
+    }
+    pub(crate) fn bucket(&self) -> &TrendBucket {
+        &self.bucket
     }
     pub(crate) fn start(&self) -> &String {
         &self.start
@@ -149,4 +155,28 @@ impl SignalPeakQuery {
     pub(crate) fn end(&self) -> &String {
         &self.end
     }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct DashboardQuery {
+    period: Option<Period>,
+    base_date: Option<String>,
+}
+impl DashboardQuery {
+    pub(crate) fn period(&self) -> &Option<Period> {
+        &self.period
+    }
+
+    pub(crate) fn base_date(&self) -> &Option<String> {
+        &self.base_date
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Period {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
 }

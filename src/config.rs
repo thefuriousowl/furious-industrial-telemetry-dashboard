@@ -13,14 +13,23 @@ pub(crate) struct SignalConfig {
     column: String,
     group: String,
     label: String,
+    #[serde(default)]
+    unit: String,
     signal_type: SignalType,
 }
 impl SignalConfig {
-    pub(crate) fn new(column: &str, group: &str, label: &str, signal_type: SignalType) -> Self {
+    pub(crate) fn new(
+        column: &str,
+        group: &str,
+        label: &str,
+        unit: &str,
+        signal_type: SignalType,
+    ) -> Self {
         Self {
             column: column.to_string(),
             group: group.to_string(),
             label: label.to_string(),
+            unit: unit.to_string(),
             signal_type,
         }
     }
@@ -35,6 +44,10 @@ impl SignalConfig {
 
     pub(crate) fn label(&self) -> &str {
         &self.label
+    }
+
+    pub(crate) fn unit(&self) -> &str {
+        &self.unit
     }
 
     pub(crate) fn signal_type(&self) -> &SignalType {
@@ -72,6 +85,71 @@ impl SourceConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum KpiOperation {
+    Summary,
+    Peak,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct KpiConfig {
+    group: String,
+    label: String,
+    operation: KpiOperation,
+}
+impl KpiConfig {
+    pub(crate) fn group(&self) -> &str {
+        &self.group
+    }
+
+    pub(crate) fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub(crate) fn operation(&self) -> &KpiOperation {
+        &self.operation
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct TrendConfig {
+    group: String,
+    label: String,
+}
+impl TrendConfig {
+    pub(crate) fn group(&self) -> &str {
+        &self.group
+    }
+
+    pub(crate) fn label(&self) -> &str {
+        &self.label
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct DashboardConfig {
+    #[serde(default)]
+    kpis: Vec<KpiConfig>,
+    #[serde(default)]
+    trends: Vec<TrendConfig>,
+    #[serde(default)]
+    group_summary_label: Option<String>,
+}
+impl DashboardConfig {
+    pub(crate) fn trends(&self) -> &[TrendConfig] {
+        &self.trends
+    }
+
+    pub(crate) fn kpis(&self) -> &[KpiConfig] {
+        &self.kpis
+    }
+
+    pub(crate) fn group_summary_label(&self) -> &Option<String> {
+        &self.group_summary_label
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppConfig {
     db_path: String,
@@ -79,6 +157,8 @@ pub(crate) struct AppConfig {
     dashboard_title: String,
     #[serde(default)]
     dashboard_subtitle: String,
+    #[serde(default)]
+    dashboard: DashboardConfig,
     source: Option<SourceConfig>,
 }
 impl AppConfig {
@@ -87,6 +167,7 @@ impl AppConfig {
             dashboard_title: dashboard_title.to_string(),
             dashboard_subtitle: dashboard_subtitle.to_string(),
             db_path: db_path.to_string(),
+            dashboard: DashboardConfig::default(),
             source: None,
         }
     }
@@ -105,6 +186,10 @@ impl AppConfig {
 
     pub(crate) fn source(&self) -> &Option<SourceConfig> {
         &self.source
+    }
+
+    pub(crate) fn dashboard(&self) -> &DashboardConfig {
+        &self.dashboard
     }
 
     pub(crate) fn configure_source(&mut self, new_source: SourceConfig) {

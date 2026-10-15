@@ -60,10 +60,10 @@ mod tests {
 
     #[test]
     fn all_selected_column_exists_in_metadata() {
-        let expected_sql = "SELECT \"Time\", \"Furnace_Flow\", \"Furnace_Pressure\" FROM \"DataLogger1\" WHERE \"Time\" >= ?1 AND \"Time\" < ?2 ORDER BY \"Time\" ASC";
+        let expected_sql = "SELECT \"Time\", \"Furnace_Flow\", \"Furnace_Pressure\" FROM \"telemetry_samples\" WHERE \"Time\" >= ?1 AND \"Time\" < ?2 ORDER BY \"Time\" ASC";
         let valid_selected_columns = ["Furnace_Flow".to_string(), "Furnace_Pressure".to_string()];
         let result = get_query_string(
-            "DataLogger1",
+            "telemetry_samples",
             "Time",
             &sample_metadata(),
             &valid_selected_columns,
@@ -76,7 +76,7 @@ mod tests {
     fn reject_empty_selected_columns() {
         let empty_selected_columns = [];
         let result = get_query_string(
-            "DataLogger1",
+            "telemetry_samples",
             "Time",
             &sample_metadata(),
             &empty_selected_columns,
@@ -88,7 +88,7 @@ mod tests {
     fn reject_empty_string_in_selected_columns() {
         let selected_columns_contains_empty_string = ["Furnace_Flow".to_string(), "".to_string()];
         let result = get_query_string(
-            "DataLogger1",
+            "telemetry_samples",
             "Time",
             &sample_metadata(),
             &selected_columns_contains_empty_string,
@@ -101,7 +101,7 @@ mod tests {
         let selected_columns_contains_mismatch_column_name =
             ["Furnace_Flow".to_string(), "Nope".to_string()];
         let result = get_query_string(
-            "DataLogger1",
+            "telemetry_samples",
             "Time",
             &sample_metadata(),
             &selected_columns_contains_mismatch_column_name,
@@ -113,7 +113,7 @@ mod tests {
     fn reject_missing_time_column() {
         let valid_selected_columns = ["Furnace_Flow".to_string(), "Furnace_Pressure".to_string()];
         let result = get_query_string(
-            "DataLogger1",
+            "telemetry_samples",
             "Timeeeeeeeeeeeeeeeee",
             &sample_metadata(),
             &valid_selected_columns,

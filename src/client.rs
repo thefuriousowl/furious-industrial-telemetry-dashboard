@@ -3,17 +3,18 @@ use std::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::{
-    config::{AppConfig, SourceConfig},
+    config::{AppConfig, DashboardConfig, SourceConfig},
     error::DbError,
     request::DbRequest,
     schema::{ColumnMetaData, RuntimeSchema},
-    telemetry::TelemetryRow,
+    telemetry::{TelemetryRow, TrendBucket},
 };
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
     dashboard_title: String,
     dashboard_subtitle: String,
+    dashboard: DashboardConfig,
     db_path: String,
     config_path: String,
     db_cli: DbClient,
@@ -23,6 +24,7 @@ impl AppState {
         Self {
             dashboard_title: config.dashboard_title().to_string(),
             dashboard_subtitle: config.dashboard_subtitle().to_string(),
+            dashboard: config.dashboard().clone(),
             db_path: config.db_path().to_string(),
             config_path: path.to_string(),
             db_cli,
@@ -42,6 +44,9 @@ impl AppState {
     }
     pub(crate) fn dashboard_subtitle(&self) -> &str {
         &self.dashboard_subtitle
+    }
+    pub(crate) fn dashboard(&self) -> &DashboardConfig {
+        &self.dashboard
     }
 }
 
@@ -192,6 +197,7 @@ impl DbClient {
         &self,
         group: String,
         label: String,
+        bucket: TrendBucket,
         start_datetime: String,
         end_datetime: String,
     ) -> Result<Vec<(String, Option<f64>)>, DbError> {
@@ -202,6 +208,7 @@ impl DbClient {
                 label,
                 start_datetime,
                 end_datetime,
+                bucket,
                 reply: reply_sender,
             })
             .map_err(|e| DbError::Channel(e.to_string()))?;

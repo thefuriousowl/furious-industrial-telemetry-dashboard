@@ -1,0 +1,50 @@
+{
+  "db_path": "local-data/example.db",
+  "dashboard_title": "Industrial telemetry",
+  "dashboard_subtitle": "Example dashboard",
+  "source": {
+    "table_name": "telemetry_samples",
+    "time_column_name": "Time",
+    "signals": [
+      {
+        "column": "Demo_Flow",
+        "group": "Demo",
+        "label": "Flow",
+        "unit": "m³/h",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Demo_Total",
+        "group": "Demo",
+        "label": "Total",
+        "unit": "m³",
+        "signal_type": "Counter"
+      }
+    ]
+  },
+  "dashboard": {
+    "kpis": [
+      {
+        "group": "Demo",
+        "label": "Flow",
+        "operation": "summary"
+      },
+      {
+        "group": "Demo",
+        "label": "Flow",
+        "operation": "peak"
+      }
+    ],
+    "trends": [
+      {
+        "group": "Demo",
+        "label": "Flow"
+      },
+      {
+        "group": "Demo",
+        "label": "Total"
+      }
+    ],
+    "group_summary_label": "Total"
+  }
+}

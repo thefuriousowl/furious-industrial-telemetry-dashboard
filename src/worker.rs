@@ -214,6 +214,7 @@ impl DbWorker {
                     label,
                     start_datetime,
                     end_datetime,
+                    bucket,
                     reply,
                 } => {
                     println!("received GetSignalTrend");
@@ -234,6 +235,7 @@ impl DbWorker {
                                     src.time_column_name(),
                                     signal.column(),
                                     signal.signal_type(),
+                                    &bucket,
                                     &start_datetime,
                                     &end_datetime,
                                 ),
