@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::error::DbError;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum SignalType {
     Instantaneous,
     Counter,
@@ -97,6 +98,8 @@ pub(crate) struct KpiConfig {
     group: String,
     label: String,
     operation: KpiOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 impl KpiConfig {
     pub(crate) fn group(&self) -> &str {
@@ -110,12 +113,17 @@ impl KpiConfig {
     pub(crate) fn operation(&self) -> &KpiOperation {
         &self.operation
     }
+    pub(crate) fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct TrendConfig {
     group: String,
     label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
 }
 impl TrendConfig {
     pub(crate) fn group(&self) -> &str {
@@ -125,6 +133,17 @@ impl TrendConfig {
     pub(crate) fn label(&self) -> &str {
         &self.label
     }
+    pub(crate) fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum Aggregation {
+    Sum,
+    #[default]
+    Mean,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -135,6 +154,10 @@ pub(crate) struct DashboardConfig {
     trends: Vec<TrendConfig>,
     #[serde(default)]
     group_summary_label: Option<String>,
+    #[serde(default)]
+    aggregations: BTreeMap<String, Aggregation>,
+    #[serde(default)]
+    global_labels: Vec<String>,
 }
 impl DashboardConfig {
     pub(crate) fn trends(&self) -> &[TrendConfig] {
@@ -147,6 +170,12 @@ impl DashboardConfig {
 
     pub(crate) fn group_summary_label(&self) -> &Option<String> {
         &self.group_summary_label
+    }
+    pub(crate) fn aggregation(&self, label: &str) -> Aggregation {
+        self.aggregations.get(label).copied().unwrap_or_default()
+    }
+    pub(crate) fn is_global(&self, label: &str) -> bool {
+        self.global_labels.iter().any(|item| item == label)
     }
 }
 fn default_listen_addr() -> std::net::SocketAddr {
@@ -186,6 +215,28 @@ impl AppConfig {
     }
     pub(crate) fn listen_addr(&self) -> std::net::SocketAddr {
         self.listen_addr
+    }
+
+    pub(crate) fn validate_setup(&self) -> Result<(), String> {
+        if self.db_path.trim().is_empty() {
+            return Err("Choose a database".into());
+        }
+        let source = self.source.as_ref().ok_or("Configure a source")?;
+        if source.table_name.trim().is_empty() || source.time_column_name.trim().is_empty() {
+            return Err("Choose a table and time column".into());
+        }
+        for signal in &source.signals {
+            if signal.column.trim().is_empty()
+                || signal.group.trim().is_empty()
+                || signal.label.trim().is_empty()
+            {
+                return Err("Each signal requires a column, group and label".into());
+            }
+            if signal.column == source.time_column_name {
+                return Err("The time column cannot also be a signal".into());
+            }
+        }
+        self.validate_dashboard()
     }
 
     pub(crate) fn validate_dashboard(&self) -> Result<(), String> {
@@ -251,6 +302,38 @@ impl AppConfig {
             }
         }
 
+        let labels = dashboard
+            .kpis
+            .iter()
+            .map(|widget| widget.label.as_str())
+            .chain(dashboard.trends.iter().map(|widget| widget.label.as_str()))
+            .chain(dashboard.group_summary_label.iter().map(String::as_str))
+            .chain(dashboard.aggregations.keys().map(String::as_str))
+            .chain(dashboard.global_labels.iter().map(String::as_str));
+        for label in labels {
+            let signals = source
+                .signals
+                .iter()
+                .filter(|signal| signal.label == label)
+                .collect::<Vec<_>>();
+            let first = signals
+                .first()
+                .ok_or_else(|| format!("Dashboard label not found: {label}"))?;
+            if signals
+                .iter()
+                .any(|signal| signal.unit != first.unit || signal.signal_type != first.signal_type)
+            {
+                return Err(format!(
+                    "Signals for '{label}' must use the same unit and signal type before combining groups"
+                ));
+            }
+            if first.signal_type == SignalType::Counter
+                && dashboard.aggregations.get(label) == Some(&Aggregation::Mean)
+            {
+                return Err(format!("Counter '{label}' must use sum aggregation"));
+            }
+        }
+
         Ok(())
     }
 
@@ -270,17 +353,57 @@ impl AppConfig {
         self.source = Some(new_source);
     }
 
-    pub(crate) async fn save_to_file(&self, path: &str) -> Result<(), DbError> {
+    // Called on the worker thread. Replace the config only after a complete write.
+    pub(crate) fn save_to_file(&self, path: &str) -> Result<(), DbError> {
+        use std::{
+            fs::OpenOptions,
+            io::Write,
+            sync::atomic::{AtomicU64, Ordering},
+        };
+        static NEXT_FILE: AtomicU64 = AtomicU64::new(0);
         let json = serde_json::to_string_pretty(self).map_err(|e| DbError::Serde(e.to_string()))?;
-        tokio::fs::write(path, json)
-            .await
-            .map_err(|e| DbError::Io(e.to_string()))
+        let target = std::path::Path::new(path);
+        let name = target
+            .file_name()
+            .ok_or_else(|| DbError::Io("Invalid config path".into()))?;
+        let (temporary, mut file) = loop {
+            let mut temporary_name = name.to_os_string();
+            temporary_name.push(format!(
+                ".{}.{}.tmp",
+                std::process::id(),
+                NEXT_FILE.fetch_add(1, Ordering::Relaxed)
+            ));
+            let temporary = target.with_file_name(temporary_name);
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+            {
+                Ok(file) => break (temporary, file),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(DbError::Io(e.to_string())),
+            }
+        };
+        let result = (|| {
+            file.write_all(json.as_bytes())?;
+            file.sync_all()?;
+            drop(file);
+            std::fs::rename(&temporary, target)
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temporary);
+        }
+        result.map_err(|e| DbError::Io(e.to_string()))
     }
 
-    pub(crate) async fn load_from_file(path: &str) -> Result<Self, DbError> {
-        let json = tokio::fs::read_to_string(path)
-            .await
-            .map_err(|e| DbError::Io(e.to_string()))?;
+    pub(crate) async fn load_or_setup(path: &str) -> Result<Self, DbError> {
+        let json = match tokio::fs::read_to_string(path).await {
+            Ok(json) => json,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::new("", "Industrial telemetry", "Telemetry dashboard"));
+            }
+            Err(e) => return Err(DbError::Io(e.to_string())),
+        };
         serde_json::from_str::<AppConfig>(&json).map_err(|e| DbError::Serde(e.to_string()))
     }
 }
@@ -398,5 +521,74 @@ mod listen_addr_tests {
             json["listen_addr"] = serde_json::json!(address);
             assert!(serde_json::from_value::<AppConfig>(json).is_err());
         }
+    }
+}
+
+#[cfg(test)]
+mod aggregation_validation_tests {
+    use super::*;
+    fn config() -> serde_json::Value {
+        serde_json::json!({"db_path":"example.db","source":{"table_name":"readings","time_column_name":"Time","signals":[
+            {"column":"a","group":"A","label":"Metric","unit":"u","signal_type":"Instantaneous"},
+            {"column":"b","group":"B","label":"Metric","unit":"u","signal_type":"Instantaneous"}
+        ]},"dashboard":{"kpis":[{"group":"A","label":"Metric","operation":"summary"}],"aggregations":{"Metric":"sum"}}})
+    }
+    #[test]
+    fn rejects_incompatible_units_and_kinds_before_combining() {
+        let mut value = config();
+        value["source"]["signals"][1]["unit"] = "different".into();
+        assert!(
+            serde_json::from_value::<AppConfig>(value)
+                .unwrap()
+                .validate_setup()
+                .is_err()
+        );
+        let mut value = config();
+        value["source"]["signals"][1]["signal_type"] = "Counter".into();
+        assert!(
+            serde_json::from_value::<AppConfig>(value)
+                .unwrap()
+                .validate_setup()
+                .is_err()
+        );
+    }
+    #[test]
+    fn rejects_unknown_global_label_and_mean_counter() {
+        let mut value = config();
+        value["dashboard"]["global_labels"] = serde_json::json!(["unknown"]);
+        assert!(
+            serde_json::from_value::<AppConfig>(value)
+                .unwrap()
+                .validate_setup()
+                .is_err()
+        );
+        let mut value = config();
+        for signal in value["source"]["signals"].as_array_mut().unwrap() {
+            signal["signal_type"] = "Counter".into();
+        }
+        value["dashboard"]["aggregations"]["Metric"] = "mean".into();
+        assert!(
+            serde_json::from_value::<AppConfig>(value)
+                .unwrap()
+                .validate_setup()
+                .is_err()
+        );
+    }
+    #[test]
+    fn aggregation_and_custom_titles_survive_save_serialization() {
+        let mut value = config();
+        value["dashboard"]["kpis"][0]["title"] = "Custom title".into();
+        let config: AppConfig = serde_json::from_value(value).unwrap();
+        config.validate_setup().unwrap();
+        let roundtrip: AppConfig =
+            serde_json::from_str(&serde_json::to_string(&config).unwrap()).unwrap();
+        assert_eq!(
+            roundtrip.dashboard().aggregation("Metric"),
+            Aggregation::Sum
+        );
+        assert_eq!(
+            roundtrip.dashboard().kpis()[0].title(),
+            Some("Custom title")
+        );
     }
 }

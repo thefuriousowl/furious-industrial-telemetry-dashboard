@@ -1,15 +1,39 @@
 use tokio::sync::oneshot;
 
 use crate::{
-    config::SourceConfig,
+    config::{AppConfig, SourceConfig},
     error::DbError,
     schema::{ColumnMetaData, RuntimeSchema},
     telemetry::{TelemetryRow, TrendBucket},
 };
 pub(crate) enum DbRequest {
+    ReadDashboard {
+        query: crate::dashboard_data::DashboardRead,
+        reply: oneshot::Sender<Result<crate::dashboard_data::DashboardSnapshot, DbError>>,
+    },
+    GetLatestTime {
+        reply: oneshot::Sender<Result<Option<String>, DbError>>,
+    },
+    ApplyConfig {
+        config: AppConfig,
+        persist_to: Option<String>,
+        reply: oneshot::Sender<Result<RuntimeSchema, DbError>>,
+    },
+    GetAppConfig {
+        reply: oneshot::Sender<Option<AppConfig>>,
+    },
     OpenDatabase {
         path: String,
         reply: oneshot::Sender<Result<(), DbError>>,
+    },
+    InspectTables {
+        path: String,
+        reply: oneshot::Sender<Result<Vec<String>, DbError>>,
+    },
+    InspectColumns {
+        path: String,
+        table_name: String,
+        reply: oneshot::Sender<Result<Vec<ColumnMetaData>, DbError>>,
     },
     ListTables {
         reply: oneshot::Sender<Result<Vec<String>, DbError>>,

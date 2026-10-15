@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Telemetry setup</title>
+    <link rel="stylesheet" href="/static/dashboard.css?v=6">
+    <link rel="stylesheet" href="/static/setup.css?v=6">
+    <script src="/static/setup.js?v=6" defer></script>
+</head>
+<body class="setup-page">
+    <header>
+        <p class="organization">Industrial telemetry</p>
+        <h1>Configure a data source</h1>
+        <p class="prototype-note">Choose a database, configure signals and widgets, then preview and save your dashboard.</p>
+    </header>
+    <form id="setup-form" novalidate>
+        <fieldset id="setup-fields" disabled>
+        <section class="setup-card setup-fields" aria-label="Dashboard settings">
+            <label>Dashboard title<input id="dashboard-title"></label>
+            <label>Dashboard subtitle<input id="dashboard-subtitle"></label>
+            <label>Ranking label<select id="ranking-label"><option value="">No ranking</option></select></label>
+            <label>Main trend<select id="main-trend"><option value="">First selected trend</option></select></label>
+        </section>
+        <section class="setup-card setup-fields" aria-label="Source settings">
+            <div>
+                <label for="database-path">Database path on server</label>
+                <input id="database-path" placeholder="Choose a database or enter its path" autocomplete="off">
+                <div class="database-actions">
+                    <button id="browse-database" type="button">Browse…</button>
+                    <button id="open-database" type="button">Open database</button>
+                </div>
+            </div>
+            <label>Table
+                <select id="table-name" disabled><option value="">Open a database first</option></select>
+            </label>
+            <label>Time column
+                <select id="time-column" disabled></select>
+            </label>
+        </section>
+        <section class="setup-card" aria-label="Signal configuration">
+            <div class="setup-toolbar">
+                <div><h2>Signals</h2><p>Map columns to groups and labels. Widgets with the same label are combined across groups.</p></div>
+                <button id="auto-generate" type="button" disabled>Auto-generate</button>
+            </div>
+            <p>Auto-generate fills empty group, label and type fields for recognized suffixes. Other columns remain available for manual setup.</p>
+            <label class="signal-search">Find a signal<input id="signal-search" type="search" placeholder="Search column, group or label"></label><div class="setup-table-wrap">
+                <table class="setup-table">
+                    <thead><tr>
+                        <th scope="col">Use</th><th scope="col">Column</th><th scope="col">Group</th>
+                        <th scope="col">Label</th><th scope="col">Unit</th><th scope="col">Type</th>
+                        <th scope="col">KPI</th><th scope="col">Trend</th>
+                    </tr></thead>
+                    <tbody id="signal-rows"></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="setup-card" aria-label="Metric aggregation">
+            <h2>How groups are combined</h2>
+            <p>Sum combines simultaneous readings (for example total flow). Mean averages available meters (for example pressure). Counters always add consumption. Site-wide measurements stay visible when a group is selected.</p>
+            <div class="setup-table-wrap"><table class="setup-table metric-rules-table"><thead><tr><th>Label</th><th>Across groups</th><th>Site-wide</th><th>Summary title</th><th>Peak title</th><th>Trend title</th></tr></thead><tbody id="metric-rules"></tbody></table></div>
+        </section>
+        <section class="setup-card setup-preview" aria-label="Configuration preview">
+            <button type="submit" id="preview-button" disabled>Preview config</button>
+            <button type="button" id="save-button" disabled>Save and open dashboard</button>
+            <a href="/dashboard">Back to dashboard</a>
+            <p id="setup-message" role="status" aria-live="polite">Loading configuration…</p>
+            <pre id="config-preview" tabindex="0" aria-label="Generated config">Your config preview will appear here.</pre>
+        </section>
+        </fieldset>
+    </form>
+    <dialog id="database-browser" aria-labelledby="browser-title">
+        <div class="setup-toolbar">
+            <h2 id="browser-title">Choose a database on the server</h2>
+            <button id="close-browser" type="button">Close</button>
+        </div>
+        <p>Browse folders on the computer running telemetry.</p>
+        <label for="browse-path">Folder path</label>
+        <input id="browse-path" autocomplete="off">
+        <div class="database-actions">
+            <button id="browse-go" type="button">Go to folder</button>
+            <button id="browse-up" type="button" disabled>Parent folder</button>
+        </div>
+        <p id="browser-message" role="status"></p>
+        <ul id="browser-entries"></ul>
+    </dialog>
+    <template id="signal-row">
+        <tr>
+            <td><input type="checkbox" data-field="use"></td>
+            <td><code data-field="column"></code><small data-field="declared-type"></small></td>
+            <td><input data-field="group"></td>
+            <td><input data-field="label"></td>
+            <td><input data-field="unit" placeholder="e.g. m³/h"></td>
+            <td><select data-field="signal-type">
+                <option value="">Choose type</option>
+                <option value="Instantaneous">Instantaneous</option>
+                <option value="Counter">Counter</option>
+            </select></td>
+            <td class="kpi-options">
+                <label><input type="checkbox" data-field="kpi-summary" checked> Summary</label>
+                <label><input type="checkbox" data-field="kpi-peak"> Peak</label>
+            </td>
+            <td><input type="checkbox" data-field="trend" checked></td>
+        </tr>
+    </template>
+</body>
+</html>

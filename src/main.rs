@@ -4,9 +4,9 @@ use axum::{Router, routing::get};
 
 use crate::{
     api::{
-        dashboard, fragment, get_group_summary, get_signal_peak, get_signal_summary,
-        get_signal_trend, get_source, kpi_fragment, list_available_columns, list_table,
-        peak_kpi_fragment, source, telemetry, total_kpi_fragment, trend_fragment,
+        fragment, get_group_summary, get_signal_peak, get_signal_summary, get_signal_trend,
+        get_source, kpi_fragment, list_available_columns, list_table, peak_kpi_fragment, source,
+        telemetry, total_kpi_fragment, trend_fragment,
     },
     client::{AppState, DbClient},
     config::AppConfig,
@@ -15,21 +15,22 @@ use crate::{
 };
 
 mod api;
+mod charts;
 mod client;
 mod config;
+mod dashboard;
+mod dashboard_data;
 mod db;
 mod dto;
 mod error;
 mod request;
 mod schema;
+mod setup;
 mod sql_command;
 mod telemetry;
 mod worker;
 
 const CONFIG_PATH: &str = "config.json";
-const DEFAULT_DB_PATH: &str = "local-data/Database.db";
-const DEFAULT_DASHBOARD_TITLE: &str = "Compressed air consumption";
-const DEFAULT_DASHBOARD_SUBTITLE: &str = "demonstrate simple analytic dashboard";
 #[tokio::main]
 async fn main() -> ExitCode {
     // Create request channel
@@ -53,59 +54,42 @@ async fn main() -> ExitCode {
             }
         };
 
-    let app_config = match std::path::Path::new(CONFIG_PATH).exists() {
-        true => {
-            let app_config = match AppConfig::load_from_file(CONFIG_PATH).await {
-                Ok(cfg) => cfg,
-                Err(e) => {
-                    eprintln!("failed to load app config file: {e}");
-                    return ExitCode::FAILURE;
-                }
-            };
-            app_config
-        }
-        false => {
-            let default_config = AppConfig::new(
-                DEFAULT_DB_PATH,
-                DEFAULT_DASHBOARD_TITLE,
-                DEFAULT_DASHBOARD_SUBTITLE,
-            );
-            if let Err(e) = default_config.save_to_file(CONFIG_PATH).await {
-                eprintln!("failed to save config to file: {e}");
-            }
-            default_config
+    let app_config = match AppConfig::load_or_setup(CONFIG_PATH).await {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("failed to read app config: {e}");
+            return ExitCode::FAILURE;
         }
     };
-    if let Err(error) = app_config.validate_dashboard() {
-        eprintln!("Invalid dashboard config: {error}");
-        return ExitCode::FAILURE;
-    }
     let app_state = AppState::from(
         app_config.clone(),
         CONFIG_PATH,
         DbClient::new(request_sender),
     );
-
-    let open_db_result = app_state.db_cli().open_database(app_state.db_path()).await;
-
-    match open_db_result {
-        Ok(()) => println!("database opened"),
-        Err(e) => eprintln!("failed to open database: {e}"),
-    }
-
-    if let Some(source_config) = app_config.clone().source() {
-        match app_state
+    if app_config.source().is_some() {
+        if let Err(e) = app_state
             .db_cli()
-            .configure_source(source_config.clone())
+            .apply_config(app_config.clone(), None)
             .await
         {
-            Ok(_schema) => {
-                println!("source configured");
-            }
-            Err(e) => eprintln!("failed to configure source {e}"),
+            eprintln!("failed to activate config: {e}. Open /setup to correct it.");
         }
+    } else {
+        println!("No source configured. Open /setup to configure telemetry.");
     }
     let app = Router::new()
+        .route("/", get(setup::home))
+        .route(
+            "/api/setup/config",
+            get(setup::current_config).post(setup::save_config),
+        )
+        .route_service(
+            "/setup",
+            tower_http::services::ServeFile::new("static/setup.html"),
+        )
+        .route("/api/setup/files", get(setup::files))
+        .route("/api/setup/tables", axum::routing::post(setup::tables))
+        .route("/api/setup/columns", axum::routing::post(setup::columns))
         .route("/api/tables", get(list_table))
         .route("/api/tables/{table}/columns", get(list_available_columns))
         .route("/api/source", get(get_source).post(source))
@@ -114,7 +98,9 @@ async fn main() -> ExitCode {
         .route("/api/group_summary", get(get_group_summary))
         .route("/api/signal_trend", get(get_signal_trend))
         .route("/api/signal_peak", get(get_signal_peak))
-        .route("/dashboard", get(dashboard))
+        .route("/dashboard", get(dashboard::page))
+        .route("/dashboard/data", get(dashboard::fragment))
+        .route("/api/dashboard", get(dashboard::data))
         .route("/dashboard/fragment", get(fragment))
         .route("/dashboard/kpi", get(kpi_fragment))
         .route("/dashboard/trend", get(trend_fragment))

@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use tokio::sync::oneshot;
 
 use crate::{
-    config::{AppConfig, DashboardConfig, SourceConfig},
+    config::{AppConfig, SourceConfig},
     error::DbError,
     request::DbRequest,
     schema::{ColumnMetaData, RuntimeSchema},
@@ -12,26 +12,17 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct AppState {
-    dashboard_title: String,
-    dashboard_subtitle: String,
-    dashboard: DashboardConfig,
-    db_path: String,
+    initial_config: AppConfig,
     config_path: String,
     db_cli: DbClient,
 }
 impl AppState {
     pub(crate) fn from(config: AppConfig, path: &str, db_cli: DbClient) -> Self {
         Self {
-            dashboard_title: config.dashboard_title().to_string(),
-            dashboard_subtitle: config.dashboard_subtitle().to_string(),
-            dashboard: config.dashboard().clone(),
-            db_path: config.db_path().to_string(),
+            initial_config: config,
             config_path: path.to_string(),
             db_cli,
         }
-    }
-    pub(crate) fn db_path(&self) -> &str {
-        &self.db_path
     }
     pub(crate) fn config_path(&self) -> &str {
         &self.config_path
@@ -39,14 +30,15 @@ impl AppState {
     pub(crate) fn db_cli(&self) -> &DbClient {
         &self.db_cli
     }
-    pub(crate) fn dashboard_title(&self) -> &str {
-        &self.dashboard_title
+    pub(crate) fn listen_addr(&self) -> std::net::SocketAddr {
+        self.initial_config.listen_addr()
     }
-    pub(crate) fn dashboard_subtitle(&self) -> &str {
-        &self.dashboard_subtitle
-    }
-    pub(crate) fn dashboard(&self) -> &DashboardConfig {
-        &self.dashboard
+    pub(crate) async fn app_config(&self) -> Result<AppConfig, DbError> {
+        Ok(self
+            .db_cli
+            .get_app_config()
+            .await?
+            .unwrap_or_else(|| self.initial_config.clone()))
     }
 }
 
@@ -55,9 +47,56 @@ pub(crate) struct DbClient {
     sender: mpsc::Sender<DbRequest>,
 }
 impl DbClient {
+    pub(crate) async fn read_dashboard(
+        &self,
+        query: crate::dashboard_data::DashboardRead,
+    ) -> Result<crate::dashboard_data::DashboardSnapshot, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::ReadDashboard { query, reply })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
+    pub(crate) async fn get_latest_time(&self) -> Result<Option<String>, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::GetLatestTime { reply })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
     pub(crate) fn new(sender: mpsc::Sender<DbRequest>) -> Self {
         Self { sender }
     }
+    pub(crate) async fn apply_config(
+        &self,
+        config: AppConfig,
+        persist_to: Option<&str>,
+    ) -> Result<RuntimeSchema, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::ApplyConfig {
+                config,
+                persist_to: persist_to.map(str::to_owned),
+                reply,
+            })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
+
+    pub(crate) async fn get_app_config(&self) -> Result<Option<AppConfig>, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::GetAppConfig { reply })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response.await.map_err(|e| DbError::Channel(e.to_string()))
+    }
+
     pub(crate) async fn open_database(&self, path: &str) -> Result<(), DbError> {
         let (reply_sender, reply_receiver) = oneshot::channel::<Result<(), DbError>>();
 
@@ -69,6 +108,37 @@ impl DbClient {
             .map_err(|e| DbError::Channel(e.to_string()))?;
 
         reply_receiver
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
+
+    pub(crate) async fn inspect_tables(&self, path: &str) -> Result<Vec<String>, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::InspectTables {
+                path: path.to_string(),
+                reply,
+            })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response
+            .await
+            .map_err(|e| DbError::Channel(e.to_string()))?
+    }
+
+    pub(crate) async fn inspect_columns(
+        &self,
+        path: &str,
+        table_name: &str,
+    ) -> Result<Vec<ColumnMetaData>, DbError> {
+        let (reply, response) = oneshot::channel();
+        self.sender
+            .send(DbRequest::InspectColumns {
+                path: path.to_string(),
+                table_name: table_name.to_string(),
+                reply,
+            })
+            .map_err(|e| DbError::Channel(e.to_string()))?;
+        response
             .await
             .map_err(|e| DbError::Channel(e.to_string()))?
     }

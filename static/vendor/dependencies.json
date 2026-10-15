@@ -1,0 +1,22 @@
+[
+  {
+    "name": "html-to-image",
+    "version": "1.11.13",
+    "source": "https://registry.npmjs.org/html-to-image/-/html-to-image-1.11.13.tgz",
+    "integrity": "sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==",
+    "file": "html-to-image-1.11.13.min.js",
+    "sha256": "a90b42909d80964269ef6d5f3d1e4a5a7e2a4c263a5d2a76a9e7151901343262",
+    "license": "MIT",
+    "license_file": "html-to-image-LICENSE.txt"
+  },
+  {
+    "name": "jspdf",
+    "version": "4.2.1",
+    "source": "https://registry.npmjs.org/jspdf/-/jspdf-4.2.1.tgz",
+    "integrity": "sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==",
+    "file": "jspdf-4.2.1.min.js",
+    "sha256": "e6551fcdc32f09d6853b2c5126d18d01d9447e0da618a41a11ebeee0f6c20d54",
+    "license": "MIT",
+    "license_file": "jspdf-LICENSE.txt"
+  }
+]

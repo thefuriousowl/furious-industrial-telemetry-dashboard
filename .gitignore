@@ -34,6 +34,7 @@ rustc-ice-*.txt
 
 # User defined
 /config.json
+/config.json.*.tmp
 local-data/
 /demo/*.db
 /demo/*.db-wal

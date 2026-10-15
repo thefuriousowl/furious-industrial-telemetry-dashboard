@@ -2,50 +2,225 @@
   "db_path": "demo/Database.db",
   "listen_addr": "127.0.0.1:3000",
   "dashboard_title": "Industrial telemetry",
-  "dashboard_subtitle": "Example dashboard",
+  "dashboard_subtitle": "Compressed air consumption",
   "source": {
     "table_name": "DataLogger1",
     "time_column_name": "Time",
     "signals": [
       {
         "column": "Assembly_A_Flow_m3h",
-        "group": "Demo",
+        "group": "Assembly A",
         "label": "Flow",
         "unit": "m³/h",
         "signal_type": "Instantaneous"
       },
       {
         "column": "Assembly_A_Total_m3",
-        "group": "Demo",
+        "group": "Assembly A",
         "label": "Total",
         "unit": "m³",
         "signal_type": "Counter"
+      },
+      {
+        "column": "Assembly_A_Pressure_bar",
+        "group": "Assembly A",
+        "label": "Pressure",
+        "unit": "bar",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Assembly_A_Temperature_C",
+        "group": "Assembly A",
+        "label": "Temperature",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Assembly_B_Flow_m3h",
+        "group": "Assembly B",
+        "label": "Flow",
+        "unit": "m³/h",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Assembly_B_Total_m3",
+        "group": "Assembly B",
+        "label": "Total",
+        "unit": "m³",
+        "signal_type": "Counter"
+      },
+      {
+        "column": "Assembly_B_Pressure_bar",
+        "group": "Assembly B",
+        "label": "Pressure",
+        "unit": "bar",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Assembly_B_Temperature_C",
+        "group": "Assembly B",
+        "label": "Temperature",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Packaging_Flow_m3h",
+        "group": "Packaging",
+        "label": "Flow",
+        "unit": "m³/h",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Packaging_Total_m3",
+        "group": "Packaging",
+        "label": "Total",
+        "unit": "m³",
+        "signal_type": "Counter"
+      },
+      {
+        "column": "Packaging_Pressure_bar",
+        "group": "Packaging",
+        "label": "Pressure",
+        "unit": "bar",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Packaging_Temperature_C",
+        "group": "Packaging",
+        "label": "Temperature",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Warehouse_Flow_m3h",
+        "group": "Warehouse",
+        "label": "Flow",
+        "unit": "m³/h",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Warehouse_Total_m3",
+        "group": "Warehouse",
+        "label": "Total",
+        "unit": "m³",
+        "signal_type": "Counter"
+      },
+      {
+        "column": "Warehouse_Pressure_bar",
+        "group": "Warehouse",
+        "label": "Pressure",
+        "unit": "bar",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Warehouse_Temperature_C",
+        "group": "Warehouse",
+        "label": "Temperature",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Workshop_Flow_m3h",
+        "group": "Workshop",
+        "label": "Flow",
+        "unit": "m³/h",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Workshop_Total_m3",
+        "group": "Workshop",
+        "label": "Total",
+        "unit": "m³",
+        "signal_type": "Counter"
+      },
+      {
+        "column": "Workshop_Pressure_bar",
+        "group": "Workshop",
+        "label": "Pressure",
+        "unit": "bar",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "Workshop_Temperature_C",
+        "group": "Workshop",
+        "label": "Temperature",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
+      },
+      {
+        "column": "System_DewPoint_C",
+        "group": "System",
+        "label": "Dew point",
+        "unit": "°C",
+        "signal_type": "Instantaneous"
       }
     ]
   },
   "dashboard": {
     "kpis": [
       {
-        "group": "Demo",
+        "group": "Assembly A",
         "label": "Flow",
-        "operation": "summary"
+        "operation": "summary",
+        "title": "Average flow"
       },
       {
-        "group": "Demo",
+        "group": "Assembly A",
         "label": "Flow",
-        "operation": "peak"
+        "operation": "peak",
+        "title": "Peak flow"
+      },
+      {
+        "group": "Assembly A",
+        "label": "Pressure",
+        "operation": "summary",
+        "title": "Line pressure"
+      },
+      {
+        "group": "Assembly A",
+        "label": "Temperature",
+        "operation": "summary",
+        "title": "Air temperature"
+      },
+      {
+        "group": "System",
+        "label": "Dew point",
+        "operation": "summary",
+        "title": "Pressure dew point"
       }
     ],
     "trends": [
       {
-        "group": "Demo",
-        "label": "Flow"
+        "group": "Assembly A",
+        "label": "Total",
+        "title": "Consumption trend"
       },
       {
-        "group": "Demo",
-        "label": "Total"
+        "group": "Assembly A",
+        "label": "Flow",
+        "title": "Flow trend"
+      },
+      {
+        "group": "Assembly A",
+        "label": "Pressure",
+        "title": "Pressure trend"
+      },
+      {
+        "group": "Assembly A",
+        "label": "Temperature",
+        "title": "Temperature trend"
       }
     ],
-    "group_summary_label": "Total"
+    "group_summary_label": "Total",
+    "aggregations": {
+      "Flow": "sum",
+      "Total": "sum",
+      "Pressure": "mean",
+      "Temperature": "mean",
+      "Dew point": "mean"
+    },
+    "global_labels": [
+      "Dew point"
+    ]
   }
 }

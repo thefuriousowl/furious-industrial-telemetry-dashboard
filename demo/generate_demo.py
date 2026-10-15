@@ -95,13 +95,13 @@ Five-minute data cannot represent true sub-five-minute instantaneous peaks.
 
 Integration with the application:
 - For a fresh checkout, copy config.example.json to config.json. It maps
-  two columns from demo/Database.db to the display group Demo and includes
-  dashboard widgets. Preserve an existing installation's config.json.
+  all 21 signals from demo/Database.db across five synthetic meter groups
+  and a site-wide sensor, with their units and dashboard widgets. Preserve an existing installation's config.json.
 - Run cargo run --offline from the repository root, then open
   http://127.0.0.1:3000/dashboard?base_date=2025-09-05&period=daily
 - Set db_path in local config.json to the actual Database.db path.
 - demo-source.json is the POST /api/source payload, not AppConfig.
-- It maps all 21 signals using different display names from the minimal
+- It maps all 21 signals using different display names from
   config.example.json. When switching source, update dashboard groups and
   labels to match it as well. Relative database paths resolve from the
   server's working directory.

@@ -2,6 +2,7 @@ use axum::http::StatusCode;
 
 #[derive(Debug)]
 pub(crate) enum DbError {
+    InvalidConfig(String),
     // 404 not found
     TableNotFound(String),
     ColumnNotFound(Vec<String>),
@@ -23,6 +24,7 @@ pub(crate) enum DbError {
 impl DbError {
     pub(crate) fn status_code(&self) -> axum::http::StatusCode {
         match self {
+            Self::InvalidConfig(_) => StatusCode::BAD_REQUEST,
             // 404 not found
             Self::TableNotFound(_) => StatusCode::NOT_FOUND,
             Self::ColumnNotFound(_) => StatusCode::NOT_FOUND,
@@ -46,6 +48,7 @@ impl DbError {
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InvalidConfig(message) => write!(f, "{message}"),
             // 404 not found
             Self::TableNotFound(table_name) => write!(f, "table '{table_name}' not found"),
             Self::ColumnNotFound(column_names) => write!(f, "column '{column_names:?}' not found"),

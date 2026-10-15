@@ -161,8 +161,12 @@ impl SignalPeakQuery {
 pub(crate) struct DashboardQuery {
     period: Option<Period>,
     base_date: Option<String>,
+    group: Option<String>,
 }
 impl DashboardQuery {
+    pub(crate) fn group(&self) -> Option<&str> {
+        self.group.as_deref().filter(|s| !s.is_empty())
+    }
     pub(crate) fn period(&self) -> &Option<Period> {
         &self.period
     }
@@ -172,7 +176,7 @@ impl DashboardQuery {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Period {
     Daily,
