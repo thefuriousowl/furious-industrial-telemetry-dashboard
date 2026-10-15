@@ -35,3 +35,9 @@ rustc-ice-*.txt
 # User defined
 /config.json
 local-data/
+/demo/*.db
+/demo/*.db-wal
+/demo/*.db-shm
+/demo/*.db-journal
+/demo/dataset-manifest.json
+/demo/__pycache__/

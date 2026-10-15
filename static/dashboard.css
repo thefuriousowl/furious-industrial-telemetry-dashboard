@@ -1,3 +1,28 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 24px;
+    font-family: system-ui, sans-serif;
+    color: #172b45;
+    background: #f4f6f8;
+    line-height: 1.5;
+}
+
+h1 {
+    margin: 8px 0 20px;
+    font-size: 28px;
+}
+
+form {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
 .row {
     display: flex;
     align-items: center;
@@ -216,4 +241,29 @@
 .period-nav button.active {
     background: #172b45;
     color: white;
+}
+
+.range-nav {
+    display: flex;
+    gap: 8px;
+}
+
+.range-nav a,
+.range-nav span {
+    display: inline-block;
+    padding: 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #fff;
+    color: #172b45;
+    font: inherit;
+    text-decoration: none;
+}
+
+.range-nav a:hover {
+    background: #e8edf3;
+}
+
+.range-nav [aria-disabled="true"] {
+    color: #94a3b8;
 }

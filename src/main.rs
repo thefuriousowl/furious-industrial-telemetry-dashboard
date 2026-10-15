@@ -123,7 +123,7 @@ async fn main() -> ExitCode {
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    let listener = tokio::net::TcpListener::bind(app_config.listen_addr())
         .await
         .unwrap();
     axum::serve(listener, app)

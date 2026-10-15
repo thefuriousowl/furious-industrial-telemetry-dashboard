@@ -149,10 +149,14 @@ impl DashboardConfig {
         &self.group_summary_label
     }
 }
-
+fn default_listen_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::from(([127, 0, 0, 1], 3000))
+}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub(crate) struct AppConfig {
     db_path: String,
+    #[serde(default = "default_listen_addr")]
+    listen_addr: std::net::SocketAddr,
     #[serde(default)]
     dashboard_title: String,
     #[serde(default)]
@@ -167,6 +171,7 @@ impl AppConfig {
             dashboard_title: dashboard_title.to_string(),
             dashboard_subtitle: dashboard_subtitle.to_string(),
             db_path: db_path.to_string(),
+            listen_addr: default_listen_addr(),
             dashboard: DashboardConfig::default(),
             source: None,
         }
@@ -178,6 +183,9 @@ impl AppConfig {
 
     pub(crate) fn dashboard_subtitle(&self) -> &str {
         &self.dashboard_subtitle
+    }
+    pub(crate) fn listen_addr(&self) -> std::net::SocketAddr {
+        self.listen_addr
     }
 
     pub(crate) fn validate_dashboard(&self) -> Result<(), String> {
@@ -274,5 +282,121 @@ impl AppConfig {
             .await
             .map_err(|e| DbError::Io(e.to_string()))?;
         serde_json::from_str::<AppConfig>(&json).map_err(|e| DbError::Serde(e.to_string()))
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn example_config() -> AppConfig {
+        serde_json::from_str(include_str!("../config.example.json"))
+            .expect("Example config must parse")
+    }
+
+    #[test]
+    fn accepts_example_dashboard() {
+        assert!(example_config().validate_dashboard().is_ok());
+    }
+
+    #[test]
+    fn accepts_unconfigured_dashboard() {
+        let config = AppConfig::new("unused.db", "", "");
+        assert!(config.validate_dashboard().is_ok());
+    }
+
+    #[test]
+    fn rejects_dashboard_without_source() {
+        let mut config = example_config();
+        config.source = None;
+
+        assert!(config.validate_dashboard().is_err());
+    }
+
+    #[test]
+    fn rejects_unknown_kpi_signal() {
+        let mut config = example_config();
+        config.dashboard.kpis[0].label = "Missing".to_string();
+
+        let error = config
+            .validate_dashboard()
+            .expect_err("Unknown KPI must be rejected");
+
+        assert!(error.contains("KPI signal not found"));
+    }
+
+    #[test]
+    fn rejects_unknown_trend_signal() {
+        let mut config = example_config();
+        config.dashboard.trends[0].group = "Missing".to_string();
+
+        let error = config
+            .validate_dashboard()
+            .expect_err("Unknown trend must be rejected");
+
+        assert!(error.contains("Trend signal not found"));
+    }
+
+    #[test]
+    fn rejects_counter_peak() {
+        let mut config = example_config();
+        config.dashboard.kpis[0].label = "Total".to_string();
+        config.dashboard.kpis[0].operation = KpiOperation::Peak;
+
+        let error = config
+            .validate_dashboard()
+            .expect_err("Counter peak must be rejected");
+
+        assert!(error.contains("Peak is unsupported for counter"));
+    }
+
+    #[test]
+    fn rejects_unknown_group_summary_label() {
+        let mut config = example_config();
+        config.dashboard.group_summary_label = Some("Missing".to_string());
+
+        let error = config
+            .validate_dashboard()
+            .expect_err("Unknown summary label must be rejected");
+
+        assert!(error.contains("Group summary label not found"));
+    }
+}
+#[cfg(test)]
+mod listen_addr_tests {
+    use super::*;
+
+    fn example_json() -> serde_json::Value {
+        serde_json::from_str(include_str!("../config.example.json")).unwrap()
+    }
+
+    #[test]
+    fn missing_address_and_new_config_use_localhost() {
+        let mut json = example_json();
+        json.as_object_mut().unwrap().remove("listen_addr");
+        let legacy: AppConfig = serde_json::from_value(json).unwrap();
+        let expected: std::net::SocketAddr = "127.0.0.1:3000".parse().unwrap();
+        assert_eq!(legacy.listen_addr(), expected);
+        assert_eq!(AppConfig::new("unused.db", "", "").listen_addr(), expected);
+    }
+
+    #[test]
+    fn custom_address_survives_serialization() {
+        let mut json = example_json();
+        json["listen_addr"] = serde_json::json!("127.0.0.1:3100");
+        let config: AppConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(config.listen_addr(), "127.0.0.1:3100".parse().unwrap());
+        assert_eq!(
+            serde_json::to_value(config).unwrap()["listen_addr"],
+            "127.0.0.1:3100"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_ip_or_port() {
+        for address in ["invalid", "127.0.0.1:70000", "999.1.1.1:3000"] {
+            let mut json = example_json();
+            json["listen_addr"] = serde_json::json!(address);
+            assert!(serde_json::from_value::<AppConfig>(json).is_err());
+        }
     }
 }

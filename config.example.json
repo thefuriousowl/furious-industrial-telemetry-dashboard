@@ -1,20 +1,21 @@
 {
-  "db_path": "local-data/example.db",
+  "db_path": "demo/Database.db",
+  "listen_addr": "127.0.0.1:3000",
   "dashboard_title": "Industrial telemetry",
   "dashboard_subtitle": "Example dashboard",
   "source": {
-    "table_name": "telemetry_samples",
+    "table_name": "DataLogger1",
     "time_column_name": "Time",
     "signals": [
       {
-        "column": "Demo_Flow",
+        "column": "Assembly_A_Flow_m3h",
         "group": "Demo",
         "label": "Flow",
         "unit": "m³/h",
         "signal_type": "Instantaneous"
       },
       {
-        "column": "Demo_Total",
+        "column": "Assembly_A_Total_m3",
         "group": "Demo",
         "label": "Total",
         "unit": "m³",

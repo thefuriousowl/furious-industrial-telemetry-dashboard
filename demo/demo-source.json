@@ -1,0 +1,132 @@
+{
+  "table_name": "DataLogger1",
+  "time_column_name": "Time",
+  "signals": [
+    {
+      "column": "Assembly_A_Flow_m3h",
+      "group": "Assembly Area A",
+      "label": "Flow (m³/h)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Assembly_A_Total_m3",
+      "group": "Assembly Area A",
+      "label": "Total (m³)",
+      "signal_type": "Counter"
+    },
+    {
+      "column": "Assembly_A_Pressure_bar",
+      "group": "Assembly Area A",
+      "label": "Pressure (bar)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Assembly_A_Temperature_C",
+      "group": "Assembly Area A",
+      "label": "Air temperature (°C)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Assembly_B_Flow_m3h",
+      "group": "Assembly Area B",
+      "label": "Flow (m³/h)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Assembly_B_Total_m3",
+      "group": "Assembly Area B",
+      "label": "Total (m³)",
+      "signal_type": "Counter"
+    },
+    {
+      "column": "Assembly_B_Pressure_bar",
+      "group": "Assembly Area B",
+      "label": "Pressure (bar)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Assembly_B_Temperature_C",
+      "group": "Assembly Area B",
+      "label": "Air temperature (°C)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Packaging_Flow_m3h",
+      "group": "Packaging Area",
+      "label": "Flow (m³/h)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Packaging_Total_m3",
+      "group": "Packaging Area",
+      "label": "Total (m³)",
+      "signal_type": "Counter"
+    },
+    {
+      "column": "Packaging_Pressure_bar",
+      "group": "Packaging Area",
+      "label": "Pressure (bar)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Packaging_Temperature_C",
+      "group": "Packaging Area",
+      "label": "Air temperature (°C)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Warehouse_Flow_m3h",
+      "group": "Warehouse",
+      "label": "Flow (m³/h)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Warehouse_Total_m3",
+      "group": "Warehouse",
+      "label": "Total (m³)",
+      "signal_type": "Counter"
+    },
+    {
+      "column": "Warehouse_Pressure_bar",
+      "group": "Warehouse",
+      "label": "Pressure (bar)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Warehouse_Temperature_C",
+      "group": "Warehouse",
+      "label": "Air temperature (°C)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Workshop_Flow_m3h",
+      "group": "Workshop",
+      "label": "Flow (m³/h)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Workshop_Total_m3",
+      "group": "Workshop",
+      "label": "Total (m³)",
+      "signal_type": "Counter"
+    },
+    {
+      "column": "Workshop_Pressure_bar",
+      "group": "Workshop",
+      "label": "Pressure (bar)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "Workshop_Temperature_C",
+      "group": "Workshop",
+      "label": "Air temperature (°C)",
+      "signal_type": "Instantaneous"
+    },
+    {
+      "column": "System_DewPoint_C",
+      "group": "Compressed Air System",
+      "label": "Pressure dew point (°C)",
+      "signal_type": "Instantaneous"
+    }
+  ]
+}

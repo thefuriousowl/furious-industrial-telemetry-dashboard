@@ -6,7 +6,7 @@ use axum::{
 
 use crate::{
     client::AppState,
-    config::{AppConfig, KpiOperation, SourceConfig},
+    config::{AppConfig, KpiOperation, SignalType, SourceConfig},
     dto::{
         DashboardQuery, GroupSummary, GroupSummaryQuery, Period, SignalSummaryQuery, SignalTrend,
         SignalTrendQuery, SingleSignalQuery, TelemetryQuery,
@@ -190,8 +190,8 @@ pub(crate) async fn dashboard(
     let base_date = match q.base_date() {
         Some(date) => date.as_str(),
         None => {
-            println!("missing date. fallback to '2026-08-03'");
-            "2026-08-03"
+            println!("missing date. fallback to today");
+            &time::OffsetDateTime::now_utc().date().to_string()
         }
     };
 
@@ -204,96 +204,38 @@ pub(crate) async fn dashboard(
         }
     };
 
-    let (start, end) = match q.period() {
-        Some(Period::Daily) | None => {
-            let end_date = match parsed_base_date.next_day() {
-                Some(date) => date,
-                None => {
-                    return Err((StatusCode::BAD_REQUEST, "Date is out of range".to_string()));
-                }
-            };
-            let start_datetime = format!("{parsed_base_date} 00:00:00");
-            let end_datetime = format!("{end_date} 00:00:00");
+    let (start_date, end_date) = dashboard_period_range(parsed_base_date, q.period())
+        .map_err(|error| (StatusCode::BAD_REQUEST, error))?;
 
-            (
-                start_datetime.replace(' ', "%20"),
-                end_datetime.replace(' ', "%20"),
-            )
-        }
-        Some(Period::Weekly) => {
-            let days_from_monday = parsed_base_date.weekday().number_days_from_monday();
-            let days_to_subtract = time::Duration::days(i64::from(days_from_monday));
-            let start_date = match parsed_base_date.checked_sub(days_to_subtract) {
-                Some(date) => date,
-                None => {
-                    return Err((StatusCode::BAD_REQUEST, "Date is out of range".to_string()));
-                }
-            };
-            let end_date = match start_date.checked_add(time::Duration::days(7)) {
-                Some(date) => date,
-                None => {
-                    return Err((StatusCode::BAD_REQUEST, "Date is out of range".to_string()));
-                }
-            };
-            let start_datetime = format!("{start_date} 00:00:00");
-            let end_datetime = format!("{end_date} 00:00:00");
-            (
-                start_datetime.replace(' ', "%20"),
-                end_datetime.replace(' ', "%20"),
-            )
-        }
-        Some(Period::Monthly) => {
-            let year = parsed_base_date.year();
-            let month = parsed_base_date.month();
-            let start_date = match time::Date::from_calendar_date(year, month, 1) {
-                Ok(date) => date,
-                Err(e) => {
-                    return Err((StatusCode::BAD_REQUEST, e.to_string()));
-                }
-            };
-            let next_month = month.next();
-            let next_year = if month == time::Month::December {
-                year + 1
-            } else {
-                year
-            };
+    let start = format!("{start_date}%2000:00:00");
+    let end = format!("{end_date}%2000:00:00");
 
-            let end_date = match time::Date::from_calendar_date(next_year, next_month, 1) {
-                Ok(date) => date,
-                Err(e) => {
-                    return Err((StatusCode::BAD_REQUEST, e.to_string()));
-                }
-            };
-            let start_datetime = format!("{start_date} 00:00:00");
-            let end_datetime = format!("{end_date} 00:00:00");
+    let period_name = match q.period() {
+        Some(Period::Daily) | None => "daily",
+        Some(Period::Weekly) => "weekly",
+        Some(Period::Monthly) => "monthly",
+        Some(Period::Yearly) => "yearly",
+    };
 
-            (
-                start_datetime.replace(' ', "%20"),
-                end_datetime.replace(' ', "%20"),
-            )
-        }
-        Some(Period::Yearly) => {
-            let year = parsed_base_date.year();
-            let start_date = match time::Date::from_calendar_date(year, time::Month::January, 1) {
-                Ok(date) => date,
-                Err(e) => {
-                    return Err((StatusCode::BAD_REQUEST, e.to_string()));
-                }
-            };
-            let end_date = match time::Date::from_calendar_date(year + 1, time::Month::January, 1) {
-                Ok(date) => date,
-                Err(e) => {
-                    return Err((StatusCode::BAD_REQUEST, e.to_string()));
-                }
-            };
-            let start_datetime = format!("{start_date} 00:00:00");
-            let end_datetime = format!("{end_date} 00:00:00");
+    let previous_date = start_date
+        .previous_day()
+        .and_then(|date| dashboard_period_range(date, q.period()).ok())
+        .map(|(start, _)| start);
+    let next_date = dashboard_period_range(end_date, q.period())
+        .ok()
+        .map(|(start, _)| start);
 
-            (
-                start_datetime.replace(' ', "%20"),
-                end_datetime.replace(' ', "%20"),
-            )
+    let previous_link = match previous_date {
+        Some(date) => format!(
+            r#"<a href="/dashboard?base_date={date}&amp;period={period_name}">Previous</a>"#
+        ),
+        None => r#"<span aria-disabled="true">Previous</span>"#.to_string(),
+    };
+    let next_link = match next_date {
+        Some(date) => {
+            format!(r#"<a href="/dashboard?base_date={date}&amp;period={period_name}">Next</a>"#)
         }
+        None => r#"<span aria-disabled="true">Next</span>"#.to_string(),
     };
 
     let bucket = match q.period() {
@@ -409,49 +351,53 @@ pub(crate) async fn dashboard(
     Ok(axum::response::Html(format!(
         r##"<html>
 
-               <head>
-                   <meta charset="utf-8">
-                   <meta name="viewport" content="width=device-width, initial-scale=1">
-                   <link rel="stylesheet" href="/static/dashboard.css">
-                   <script src="/static/htmx.min.js" defer></script>
-                   <script src="/static/dashboard.js" defer></script>
-               </head>
+       <head>
+           <meta charset="utf-8">
+           <meta name="viewport" content="width=device-width, initial-scale=1">
+           <link rel="stylesheet" href="/static/dashboard.css?v=3">
+           <script src="/static/htmx.min.js" defer></script>
+           <script src="/static/dashboard.js?v=2" defer></script>
+       </head>
 
-               <body>
-                   <p>{title}</p>
-                   <h1>{subtitle}</h1>
-                   <form action="/dashboard" method="get">
-                       <label>
-                           Date:
-                           <input type="date" name="base_date" value="{parsed_base_date}" required>
-                       </label>
+       <body>
+           <p>{title}</p>
+           <h1>{subtitle}</h1>
+           <form action="/dashboard" method="get">
+               <label>
+                   Date:
+                   <input type="date" name="base_date" value="{parsed_base_date}" required>
+               </label>
 
-                       <div class="period-nav">
-                           <button type="submit" name="period" value="daily" class="{daily_class}">Daily</button>
+               <div class="period-nav">
+                   <button type="submit" name="period" value="daily" class="{daily_class}">Daily</button>
 
-                           <button type="submit" name="period" value="weekly" class="{weekly_class}">Weekly</button>
+                   <button type="submit" name="period" value="weekly" class="{weekly_class}">Weekly</button>
 
-                           <button type="submit" name="period" value="monthly" class="{monthly_class}">Monthly</button>
+                   <button type="submit" name="period" value="monthly" class="{monthly_class}">Monthly</button>
 
-                           <button type="submit" name="period" value="yearly" class="{yearly_class}">Yearly</button>
-                       </div>
-                   </form>
-                   <p>Data from {display_start} to before {display_end}</p>
-                   <div class="kpi-row">
-                       {kpis_html}
-                   </div>
+                   <button type="submit" name="period" value="yearly" class="{yearly_class}">Yearly</button>
+               </div>
+               <nav class="range-nav" aria-label="Period navigation">
+                   {previous_link}
+                   {next_link}
+               </nav>
+           </form>
+           <p>Data from {display_start} to before {display_end}</p>
+           <div class="kpi-row">
+               {kpis_html}
+           </div>
 
-                   <div class="chart-row">
-                       {main_trend}
-                       {ranking_html}
-                   </div>
+           <div class="chart-row">
+               {main_trend}
+               {ranking_html}
+           </div>
 
-                   <div class="detail-charts">
-                       {detail_trends}
-                   </div>
-               </body>
+           <div class="detail-charts">
+               {detail_trends}
+           </div>
+       </body>
 
-               </html>"##
+       </html>"##
     )))
 }
 
@@ -505,26 +451,33 @@ pub(crate) async fn fragment(
             let total: f64 = summaries.iter().filter_map(|(_, v)| *v).sum();
             let header = format!(
                 r#"<h3>{label} by group</h3>
-                <p><strong>Total:</strong> {total:.1} {unit}</p>"#
+   <p><strong>Total:</strong> <span data-number="{total}">{total:.1}</span> {unit}</p>"#
             );
             let rows = summaries
                 .iter()
-                .map(|(group, value)| {
-                    match value {
-                        Some(v) => {
-                            let pct = if total > 0.0 { (v / total) * 100.0 } else { 0.0 };
-                            format!(
-                                r#"<div class="row"><span class="group">{group}</span><div class="bar-track"><div class="bar-fill" style="width: {pct:.1}%"></div></div><span class="value">{v:.1} ({pct:.1}%)</span></div>"#
-                            )
-                        }
-                        None =>
-                            format!(
-                                r#"<div class="row">
+                .map(|(group, value)| match value {
+                    Some(v) => {
+                        let pct = if total > 0.0 {
+                            (v / total) * 100.0
+                        } else {
+                            0.0
+                        };
+                        format!(
+                            r#"<div class="row"><span class="group">{group}</span>
+                                    <div class="bar-track">
+                                        <div class="bar-fill" style="width: {pct:.1}%"></div>
+                                    </div><span class="value">
+                                        <span data-number="{v}">{v:.1}</span> ({pct:.1}%)
+                                    </span>
+                                </div>"#
+                        )
+                    }
+                    None => format!(
+                        r#"<div class="row">
                                     <span class="group">{group}</span>
                                     <span class="value">No data</span>
                                 </div>"#
-                            ),
-                    }
+                    ),
                 })
                 .collect::<Vec<_>>()
                 .join("");
@@ -570,7 +523,11 @@ pub(crate) async fn kpi_fragment(
 
     let label = escape_html(signal.label());
     let unit = escape_html(signal.unit());
-
+    let group = escape_html(signal.group());
+    let summary_kind = match signal.signal_type() {
+        SignalType::Instantaneous => "Average",
+        SignalType::Counter => "Consumption",
+    };
     // read value
     let result = app_state
         .db_cli()
@@ -586,15 +543,16 @@ pub(crate) async fn kpi_fragment(
         Ok(Some(v)) => format!(
             r#"<div class="kpi">
                 <div class="kpi-value">
-                    {v:.1} <span class="kpi-unit">{unit}</span>
+                    <span data-number="{v}">{v:.1}</span>
+                    <span class="kpi-unit">{unit}</span>
                 </div>
-                <div class="kpi-label">{label}</div>
+                <div class="kpi-label">{group}/{label} · {summary_kind}</div>
             </div>"#
         ),
         Ok(None) => format!(
             r#"<div class="kpi">
                 <div class="kpi-value">No data</div>
-                <div class="kpi-label">{label}</div>
+                <div class="kpi-label">{group}/{label} · {summary_kind}</div>
             </div>"#
         ),
         Err(e) => format!("<p>error: {}</p>", escape_html(&e.to_string())),
@@ -626,6 +584,7 @@ pub(crate) async fn peak_kpi_fragment(
     };
     let label = escape_html(signal.label());
     let unit = escape_html(signal.unit());
+    let group = escape_html(signal.group());
     let result = app_state
         .db_cli()
         .get_signal_peak(
@@ -639,16 +598,17 @@ pub(crate) async fn peak_kpi_fragment(
     let html = match result {
         Ok(Some(v)) => format!(
             r#"<div class="kpi">
-            <div class="kpi-value">
-                {v:.1} <span class="kpi-unit">{unit}</span>
-            </div>
-            <div class="kpi-label">Peak {label}</div>
-        </div>"#
+                <div class="kpi-value">
+                    <span data-number="{v}">{v:.1}</span>
+                    <span class="kpi-unit">{unit}</span>
+                </div>
+                <div class="kpi-label">Peak {group}/{label}</div>
+            </div>"#
         ),
         Ok(None) => format!(
             r#"<div class="kpi">
             <div class="kpi-value">No data</div>
-            <div class="kpi-label">Peak {label}</div>
+            <div class="kpi-label">Peak {group}/{label}</div>
         </div>"#
         ),
         Err(e) => format!("<p>error: {}</p>", escape_html(&e.to_string())),
@@ -701,9 +661,9 @@ pub(crate) async fn total_kpi_fragment(
             if !has_values {
                 return axum::response::Html(
                     r#"<div class="kpi">
-                <div class="kpi-value">No data</div>
-                <div class="kpi-label">Total consumption</div>
-            </div>"#
+                        <div class="kpi-value">No data</div>
+                        <div class="kpi-label">Total consumption</div>
+                    </div>"#
                         .to_string(),
                 );
             }
@@ -712,11 +672,12 @@ pub(crate) async fn total_kpi_fragment(
 
             format!(
                 r#"<div class="kpi">
-            <div class="kpi-value">
-                {total:.1} <span class="kpi-unit">{unit}</span>
-            </div>
-            <div class="kpi-label">Total consumption</div>
-        </div>"#
+                    <div class="kpi-value">
+                        <span data-number="{total}">{total:.1}</span>
+                        <span class="kpi-unit">{unit}</span>
+                    </div>
+                    <div class="kpi-label">Total consumption</div>
+                </div>"#
             )
         }
         Err(e) => format!("<p>error: {}</p>", escape_html(&e.to_string())),
@@ -750,6 +711,16 @@ pub(crate) async fn trend_fragment(
     let group = escape_html(signal.group());
     let label = escape_html(signal.label());
     let unit = escape_html(signal.unit());
+    let summary_kind = match signal.signal_type() {
+        SignalType::Instantaneous => "Average",
+        SignalType::Counter => "Consumption",
+    };
+
+    let bucket_label = match q.bucket() {
+        TrendBucket::Hour => "hour",
+        TrendBucket::Day => "day",
+        TrendBucket::Month => "month",
+    };
     let result = app_state
         .db_cli()
         .get_signal_trend(
@@ -763,12 +734,18 @@ pub(crate) async fn trend_fragment(
 
     let html = match result {
         Ok(points) => {
-            let has_values = points.iter().any(|(_, value)| value.is_some());
+            let points = match fill_trend_buckets(q.start(), q.end(), q.bucket(), points) {
+                Ok(points) => points,
+                Err(error) => {
+                    return axum::response::Html(format!("<p>error: {}</p>", escape_html(&error)));
+                }
+            };
 
+            let has_values = points.iter().any(|(_, value)| value.is_some());
             if !has_values {
                 return axum::response::Html(format!(
                     r#"<h3>{group} / {label}</h3>
-                        <p>Unit: {unit}</p>
+                        <p>{summary_kind} per {bucket_label} · Unit: {unit}</p>
                         <p>No data in this period</p>"#
                 ));
             }
@@ -789,21 +766,22 @@ pub(crate) async fn trend_fragment(
 
             let bars = points
                 .iter()
-                .map(|(day, value)| match value {
-                    Some(v) => {
-                        let value_pct = ((v - axis_min) / axis_range) * 100.0;
-                        let bottom_pct = value_pct.min(zero_pct);
-                        let height_pct = (value_pct - zero_pct).abs();
+                .map(|(day, value)| {
+                    match value {
+                        Some(v) => {
+                            let value_pct = ((v - axis_min) / axis_range) * 100.0;
+                            let bottom_pct = value_pct.min(zero_pct);
+                            let height_pct = (value_pct - zero_pct).abs();
 
-                        format!(
-                            r#"<div class="trend-slot" title="{day}: {v:.1}">
-                        <div class="trend-bar"
-                             style="bottom: {bottom_pct:.4}%; height: {height_pct:.4}%">
-                        </div>
-                    </div>"#
-                        )
+                            format!(
+                                r#"<div class="trend-slot" title="{day}: {v:.1}">
+                                    <div class="trend-bar" style="bottom: {bottom_pct:.4}%; height: {height_pct:.4}%">
+                                    </div>
+                                </div>"#
+                            )
+                        }
+                        None => format!(r#"<div class="trend-slot" title="{day}: no data"></div>"#),
                     }
-                    None => format!(r#"<div class="trend-slot" title="{day}: no data"></div>"#),
                 })
                 .collect::<Vec<_>>()
                 .join("");
@@ -839,43 +817,331 @@ pub(crate) async fn trend_fragment(
             }
             format!(
                 r#"<h3>{group} / {label}</h3>
-        <p>Unit: {unit}</p>
+                <p>{summary_kind} per {bucket_label} · Unit: {unit}</p>
 
-        <div class="trend-plot">
-            <div class="trend-axis">
-                <span>{axis_max:.1}</span>
-                <span>{axis_mid:.1}</span>
-                <span>{axis_min:.1}</span>
-            </div>
+                <div class="trend-plot">
+                    <div class="trend-axis">
+                        <span>{axis_max:.1}</span>
+                        <span>{axis_mid:.1}</span>
+                        <span>{axis_min:.1}</span>
+                    </div>
 
-            <div class="trend-chart">
-                <div class="trend-zero"
-                     style="bottom: {zero_pct:.4}%">
+                    <div class="trend-chart">
+                        <div class="trend-zero" style="bottom: {zero_pct:.4}%">
+                        </div>
+                        {bars}
+                    </div>
+
+                    <div class="trend-labels">{time_labels}</div>
                 </div>
-                {bars}
-            </div>
-
-            <div class="trend-labels">{time_labels}</div>
-        </div>
-        <details class="trend-data">
-            <summary>View data</summary>
-                <div class="trend-table-wrap">
-                    <table class="trend-table">
-                    <thead>
-                    <tr>
-                    <th scope="col">Time</th>
-                    <th scope="col">Value {unit}</th>
-                </tr>
-            </thead>
-            <tbody>{table_rows}</tbody>
-        </table>
-    </div>
-</details>
-        "#
+                <details class="trend-data">
+                    <summary>View data</summary>
+                    <div class="trend-table-wrap">
+                        <table class="trend-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Time</th>
+                                    <th scope="col">{summary_kind} ({unit})</th>
+                                </tr>
+                            </thead>
+                            <tbody>{table_rows}</tbody>
+                        </table>
+                    </div>
+                </details>
+                "#
             )
         }
         Err(e) => format!("<p>error: {e}</p>"),
     };
 
     axum::response::Html(html)
+}
+fn fill_trend_buckets(
+    start: &str,
+    end: &str,
+    bucket: &TrendBucket,
+    points: Vec<(String, Option<f64>)>,
+) -> Result<Vec<(String, Option<f64>)>, String> {
+    let format = time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
+    let start = time::PrimitiveDateTime::parse(start, format).map_err(|e| e.to_string())?;
+    let end = time::PrimitiveDateTime::parse(end, format).map_err(|e| e.to_string())?;
+
+    if start >= end {
+        return Err("Start must be before end".to_string());
+    }
+
+    let mut cursor = (match bucket {
+        TrendBucket::Hour => start.date().with_hms(start.hour(), 0, 0),
+        TrendBucket::Day => Ok(start.date().midnight()),
+        TrendBucket::Month => start.date().replace_day(1).map(|d| d.midnight()),
+    })
+    .map_err(|e| e.to_string())?;
+
+    let mut values: std::collections::BTreeMap<_, _> = points.into_iter().collect();
+    let mut filled = Vec::new();
+
+    while cursor < end {
+        let key = match bucket {
+            TrendBucket::Hour => format!("{} {:02}:00:00", cursor.date(), cursor.hour()),
+            TrendBucket::Day | TrendBucket::Month => cursor.date().to_string(),
+        };
+        let value = match values.remove(&key) {
+            Some(value) => value,
+            None => None,
+        };
+        filled.push((key, value));
+
+        let next = match bucket {
+            TrendBucket::Hour => cursor.checked_add(time::Duration::hours(1)),
+            TrendBucket::Day => cursor.checked_add(time::Duration::days(1)),
+            TrendBucket::Month => {
+                let month = cursor.month().next();
+                let year = if cursor.month() == time::Month::December {
+                    cursor.year() + 1
+                } else {
+                    cursor.year()
+                };
+                time::Date::from_calendar_date(year, month, 1)
+                    .ok()
+                    .map(|date| date.midnight())
+            }
+        };
+        match next {
+            Some(next) => {
+                cursor = next;
+            }
+            None => {
+                break;
+            }
+        }
+    }
+
+    Ok(filled)
+}
+
+fn dashboard_period_range(
+    base_date: time::Date,
+    period: &Option<Period>,
+) -> Result<(time::Date, time::Date), String> {
+    let out_of_range = || "Date is out of range".to_string();
+    let start = match period {
+        Some(Period::Daily) | None => base_date,
+        Some(Period::Weekly) => base_date
+            .checked_sub(time::Duration::days(i64::from(
+                base_date.weekday().number_days_from_monday(),
+            )))
+            .ok_or_else(out_of_range)?,
+        Some(Period::Monthly) => base_date.replace_day(1).map_err(|e| e.to_string())?,
+        Some(Period::Yearly) => {
+            time::Date::from_calendar_date(base_date.year(), time::Month::January, 1)
+                .map_err(|e| e.to_string())?
+        }
+    };
+    let end = match period {
+        Some(Period::Daily) | None => start.next_day().ok_or_else(out_of_range)?,
+        Some(Period::Weekly) => start
+            .checked_add(time::Duration::days(7))
+            .ok_or_else(out_of_range)?,
+        Some(Period::Monthly) => {
+            let next_year = if start.month() == time::Month::December {
+                start.year() + 1
+            } else {
+                start.year()
+            };
+            time::Date::from_calendar_date(next_year, start.month().next(), 1)
+                .map_err(|e| e.to_string())?
+        }
+        Some(Period::Yearly) => {
+            time::Date::from_calendar_date(start.year() + 1, time::Month::January, 1)
+                .map_err(|e| e.to_string())?
+        }
+    };
+    Ok((start, end))
+}
+
+#[cfg(test)]
+mod period_navigation_tests {
+    use super::*;
+    use time::macros::date;
+
+    fn navigation(
+        base: time::Date,
+        period: &Option<Period>,
+    ) -> (Option<time::Date>, Option<time::Date>) {
+        let (start, end) = dashboard_period_range(base, period).unwrap();
+        let previous = start
+            .previous_day()
+            .and_then(|d| dashboard_period_range(d, period).ok())
+            .map(|(start, _)| start);
+        let next = dashboard_period_range(end, period)
+            .ok()
+            .map(|(start, _)| start);
+        (previous, next)
+    }
+
+    #[test]
+    fn daily_navigation_crosses_leap_day_and_default_is_daily() {
+        assert_eq!(
+            navigation(date!(2024 - 03 - 01), &Some(Period::Daily)),
+            (Some(date!(2024 - 02 - 29)), Some(date!(2024 - 03 - 02)),)
+        );
+        assert_eq!(
+            dashboard_period_range(date!(2026 - 09 - 05), &None).unwrap(),
+            (date!(2026 - 09 - 05), date!(2026 - 09 - 06),)
+        );
+    }
+
+    #[test]
+    fn weekly_navigation_uses_monday_and_crosses_year_boundary() {
+        let period = Some(Period::Weekly);
+        assert_eq!(
+            dashboard_period_range(date!(2026 - 01 - 01), &period).unwrap(),
+            (date!(2025 - 12 - 29), date!(2026 - 01 - 05),)
+        );
+        assert_eq!(
+            navigation(date!(2026 - 01 - 01), &period),
+            (Some(date!(2025 - 12 - 22)), Some(date!(2026 - 01 - 05)),)
+        );
+    }
+
+    #[test]
+    fn monthly_navigation_handles_31st_and_february() {
+        let period = Some(Period::Monthly);
+        assert_eq!(
+            navigation(date!(2024 - 03 - 31), &period),
+            (Some(date!(2024 - 02 - 01)), Some(date!(2024 - 04 - 01)),)
+        );
+        assert_eq!(
+            dashboard_period_range(date!(2024 - 02 - 29), &period).unwrap(),
+            (date!(2024 - 02 - 01), date!(2024 - 03 - 01),)
+        );
+        assert_eq!(
+            navigation(date!(2026 - 12 - 31), &period).1,
+            Some(date!(2027 - 01 - 01))
+        );
+    }
+
+    #[test]
+    fn yearly_navigation_handles_february_29() {
+        assert_eq!(
+            navigation(date!(2024 - 02 - 29), &Some(Period::Yearly)),
+            (Some(date!(2023 - 01 - 01)), Some(date!(2025 - 01 - 01)),)
+        );
+    }
+
+    #[test]
+    fn navigation_disables_links_at_date_limits() {
+        assert_eq!(navigation(time::Date::MIN, &Some(Period::Daily)).0, None);
+        let before_max = time::Date::MAX.previous_day().unwrap();
+        assert_eq!(navigation(before_max, &Some(Period::Daily)).1, None);
+        assert!(dashboard_period_range(time::Date::MAX, &Some(Period::Daily)).is_err());
+    }
+}
+
+#[cfg(test)]
+mod trend_bucket_tests {
+    use super::*;
+    fn point(key: &str, value: Option<f64>) -> (String, Option<f64>) {
+        (key.to_string(), value)
+    }
+    #[test]
+    fn daily_fills_hours_and_preserves_zero_and_null() {
+        let points = fill_trend_buckets(
+            "2026-09-05 00:00:00",
+            "2026-09-06 00:00:00",
+            &TrendBucket::Hour,
+            vec![
+                point("2026-09-05 03:00:00", Some(0.0)),
+                point("2026-09-05 08:00:00", Some(9.0)),
+                point("2026-09-05 09:00:00", None),
+            ],
+        )
+        .unwrap();
+        assert_eq!(points.len(), 24);
+        assert_eq!(points[0], point("2026-09-05 00:00:00", None));
+        assert_eq!(points[3].1, Some(0.0));
+        assert_eq!(points[8].1, Some(9.0));
+        assert_eq!(points[9].1, None);
+        assert_eq!(points[23].0, "2026-09-05 23:00:00");
+    }
+    #[test]
+    fn yearly_fills_all_months_preserving_values() {
+        let points = fill_trend_buckets(
+            "2026-01-01 00:00:00",
+            "2027-01-01 00:00:00",
+            &TrendBucket::Month,
+            vec![
+                point("2026-09-01", Some(4.0)),
+                point("2026-07-01", Some(7.0)),
+                point("2026-08-01", Some(8.0)),
+            ],
+        )
+        .unwrap();
+        assert_eq!(points.len(), 12);
+        assert_eq!(points[0], point("2026-01-01", None));
+        assert_eq!(points[6].1, Some(7.0));
+        assert_eq!(points[7].1, Some(8.0));
+        assert_eq!(points[8].1, Some(4.0));
+        assert_eq!(points[11], point("2026-12-01", None));
+    }
+    #[test]
+    fn handles_leap_year_and_regular_february() {
+        for (year, days) in [(2024, 29), (2026, 28)] {
+            let p = fill_trend_buckets(
+                &format!("{year}-02-01 00:00:00"),
+                &format!("{year}-03-01 00:00:00"),
+                &TrendBucket::Day,
+                vec![],
+            )
+            .unwrap();
+            assert_eq!(p.len(), days);
+            assert!(p.iter().all(|(_, v)| v.is_none()));
+        }
+    }
+    #[test]
+    fn monthly_crosses_december_into_january() {
+        let p = fill_trend_buckets(
+            "2026-12-01 00:00:00",
+            "2027-02-01 00:00:00",
+            &TrendBucket::Month,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(
+            p,
+            vec![point("2026-12-01", None), point("2027-01-01", None)]
+        );
+    }
+    #[test]
+    fn floors_partial_start_and_excludes_end_boundary() {
+        let p = fill_trend_buckets(
+            "2026-09-05 03:30:00",
+            "2026-09-05 05:00:00",
+            &TrendBucket::Hour,
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(
+            p,
+            vec![
+                point("2026-09-05 03:00:00", None),
+                point("2026-09-05 04:00:00", None)
+            ]
+        );
+    }
+    #[test]
+    fn rejects_invalid_or_reversed_range() {
+        assert!(
+            fill_trend_buckets("bad", "2026-09-06 00:00:00", &TrendBucket::Hour, vec![]).is_err()
+        );
+        assert!(
+            fill_trend_buckets(
+                "2026-09-06 00:00:00",
+                "2026-09-05 00:00:00",
+                &TrendBucket::Hour,
+                vec![]
+            )
+            .is_err()
+        );
+    }
 }

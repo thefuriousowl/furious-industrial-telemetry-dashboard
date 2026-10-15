@@ -139,9 +139,10 @@ impl DbReader {
             SignalType::Instantaneous => format!(
                 "SELECT AVG(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" <?2"
             ),
-            SignalType::Counter => format!(
-                "SELECT MAX(\"{column}\") - MIN(\"{column}\") FROM \"{table_name}\" WHERE \"{expected_time_column_name}\" >= ?1 AND \"{expected_time_column_name}\" < ?2"
-            ),
+            SignalType::Counter => {
+                let steps = counter_steps_sql(table_name, expected_time_column_name, column);
+                format!("{steps} SELECT SUM(consumption) FROM counter_steps")
+            }
         };
 
         self.conn
@@ -159,13 +160,7 @@ impl DbReader {
         start: &str,
         end: &str,
     ) -> Result<Vec<(String, Option<f64>)>, DbError> {
-        let bucket_map = match bucket {
-            TrendBucket::Hour => {
-                format!(r#"strftime('%Y-%m-%d %H:00:00', "{expected_time_column_name}")"#)
-            }
-            TrendBucket::Day => format!(r#"date("{expected_time_column_name}")"#),
-            TrendBucket::Month => format!(r#"strftime('%Y-%m-01', "{expected_time_column_name}")"#),
-        };
+        let bucket_map = trend_bucket_sql(bucket, expected_time_column_name);
         let sql = match signal_type {
             SignalType::Instantaneous => format!(
                 r#"SELECT {bucket_map}, AVG("{column}")
@@ -175,14 +170,17 @@ impl DbReader {
             GROUP BY {bucket_map}
             ORDER BY {bucket_map} ASC"#
             ),
-            SignalType::Counter => format!(
-                r#"SELECT {bucket_map}, MAX("{column}") - MIN("{column}")
-            FROM "{table_name}"
-            WHERE "{expected_time_column_name}" >= ?1
-            AND "{expected_time_column_name}" < ?2
-            GROUP BY {bucket_map}
-            ORDER BY {bucket_map} ASC"#
-            ),
+            SignalType::Counter => {
+                let steps = counter_steps_sql(table_name, expected_time_column_name, column);
+                let bucket_map = trend_bucket_sql(bucket, "sample_time");
+                format!(
+                    r#"{steps}
+                    SELECT {bucket_map}, SUM(consumption)
+                    FROM counter_steps
+                    GROUP BY {bucket_map}
+                    ORDER BY {bucket_map} ASC"#
+                )
+            }
         };
         let mut stmt = self
             .conn
@@ -217,5 +215,179 @@ impl DbReader {
         self.conn
             .query_row(&sql, [start, end], |r| r.get(0))
             .map_err(|e| DbError::Sqlite(e.to_string()))
+    }
+}
+
+fn counter_steps_sql(table: &str, time_column: &str, column: &str) -> String {
+    let table = table.replace('"', "\"\"");
+    let time_column = time_column.replace('"', "\"\"");
+    let column = column.replace('"', "\"\"");
+    format!(
+        r#"WITH range_samples AS (
+        SELECT "{time_column}" AS sample_time, "{column}" AS reading
+        FROM "{table}"
+        WHERE "{time_column}" >= ?1 AND "{time_column}" < ?2
+    ), previous_sample AS (
+        SELECT "{time_column}" AS sample_time, "{column}" AS reading
+        FROM "{table}"
+        WHERE "{time_column}" < ?1 AND "{column}" IS NOT NULL
+        ORDER BY "{time_column}" DESC LIMIT 1
+    ), valid_samples AS (
+        SELECT sample_time, reading FROM previous_sample
+        UNION ALL
+        SELECT sample_time, reading FROM range_samples WHERE reading IS NOT NULL
+    ), counter_readings AS (
+        SELECT sample_time, reading,
+            LAG(reading) OVER (ORDER BY sample_time) AS previous_reading
+        FROM valid_samples
+    ), counter_steps AS (
+        SELECT sample_time,
+            CASE
+                WHEN previous_reading IS NULL THEN NULL
+                WHEN reading >= previous_reading THEN reading - previous_reading
+                ELSE reading
+            END AS consumption
+        FROM counter_readings
+        WHERE sample_time >= ?1 AND sample_time < ?2
+        UNION ALL
+        SELECT sample_time, NULL FROM range_samples WHERE reading IS NULL
+    )"#
+    )
+}
+fn trend_bucket_sql(bucket: &TrendBucket, time_column: &str) -> String {
+    let time_column = time_column.replace('"', "\"\"");
+    match bucket {
+        TrendBucket::Hour => format!(r#"strftime('%Y-%m-%d %H:00:00', "{time_column}")"#),
+        TrendBucket::Day => format!(r#"date("{time_column}")"#),
+        TrendBucket::Month => format!(r#"strftime('%Y-%m-01', "{time_column}")"#),
+    }
+}
+
+#[cfg(test)]
+mod counter_review {
+    use super::*;
+    fn reader(rows: &[(&str, Option<f64>)]) -> DbReader {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE samples(Time TEXT, Counter REAL);")
+            .unwrap();
+        for (time, value) in rows {
+            conn.execute(
+                "INSERT INTO samples VALUES (?1,?2)",
+                rusqlite::params![time, value],
+            )
+            .unwrap();
+        }
+        DbReader { conn }
+    }
+    fn summary(db: &DbReader, start: &str, end: &str) -> Option<f64> {
+        db.get_signal_summary(
+            "samples",
+            "Time",
+            "Counter",
+            &SignalType::Counter,
+            start,
+            end,
+        )
+        .unwrap()
+    }
+    fn trend(
+        db: &DbReader,
+        bucket: TrendBucket,
+        start: &str,
+        end: &str,
+    ) -> Vec<(String, Option<f64>)> {
+        db.get_signal_trend(
+            "samples",
+            "Time",
+            "Counter",
+            &SignalType::Counter,
+            &bucket,
+            start,
+            end,
+        )
+        .unwrap()
+    }
+    const START: &str = "2026-09-05 00:00:00";
+    const END: &str = "2026-09-06 00:00:00";
+    #[test]
+    fn preserves_hour_boundary_and_prior_baseline() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", Some(104.0)),
+            ("2026-09-05 01:00:00", Some(109.0)),
+        ]);
+        assert_eq!(summary(&db, START, END), Some(9.0));
+        let points = trend(&db, TrendBucket::Hour, START, END);
+        assert_eq!(
+            points.iter().map(|p| p.1).collect::<Vec<_>>(),
+            vec![Some(4.0), Some(5.0)]
+        );
+    }
+    #[test]
+    fn reset_observed_at_zero() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", Some(110.0)),
+            ("2026-09-05 00:01:00", Some(0.0)),
+            ("2026-09-05 00:02:00", Some(5.0)),
+        ]);
+        assert_eq!(summary(&db, START, END), Some(15.0));
+    }
+    #[test]
+    fn reset_between_samples() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", Some(110.0)),
+            ("2026-09-05 00:01:00", Some(2.0)),
+        ]);
+        assert_eq!(summary(&db, START, END), Some(12.0));
+    }
+    #[test]
+    fn constant_is_zero() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", Some(100.0)),
+        ]);
+        assert_eq!(summary(&db, START, END), Some(0.0));
+    }
+    #[test]
+    fn absent_baseline_and_single_sample_is_unknown() {
+        let db = reader(&[("2026-09-05 00:00:00", Some(100.0))]);
+        assert_eq!(summary(&db, START, END), None);
+    }
+    #[test]
+    fn missing_readings_keep_empty_bucket() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", None),
+            ("2026-09-05 01:00:00", Some(109.0)),
+        ]);
+        assert_eq!(summary(&db, START, END), Some(9.0));
+        let points = trend(&db, TrendBucket::Hour, START, END);
+        assert_eq!(
+            points.iter().map(|p| p.1).collect::<Vec<_>>(),
+            vec![None, Some(9.0)]
+        );
+    }
+    #[test]
+    fn adjacent_periods_add_up() {
+        let db = reader(&[
+            ("2026-09-04 23:59:00", Some(100.0)),
+            ("2026-09-05 00:00:00", Some(104.0)),
+            ("2026-09-05 23:59:00", Some(110.0)),
+            ("2026-09-06 00:00:00", Some(112.0)),
+            ("2026-09-06 01:00:00", Some(115.0)),
+        ]);
+        assert_eq!(
+            summary(&db, START, "2026-09-07 00:00:00"),
+            Some(
+                summary(&db, START, END).unwrap()
+                    + summary(&db, END, "2026-09-07 00:00:00").unwrap()
+            )
+        );
+    }
+    #[test]
+    fn empty_range_is_unknown() {
+        assert_eq!(summary(&reader(&[]), START, END), None);
     }
 }
