@@ -46,10 +46,15 @@ pub(crate) async fn source(
             return Err((e.status_code(), e.to_string()));
         }
     };
-    let result = app_state.db_cli().configure_source(req.clone()).await;
+    app_config.configure_source(req.clone());
+
+    if let Err(error) = app_config.validate_dashboard() {
+        return Err((StatusCode::BAD_REQUEST, error));
+    }
+
+    let result = app_state.db_cli().configure_source(req).await;
     match result {
         Ok(schema) => {
-            app_config.configure_source(req);
             if let Err(e) = app_config.save_to_file(app_state.config_path()).await {
                 eprintln!("failed to save config to disk: {e}");
                 return Err((

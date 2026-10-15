@@ -180,6 +180,72 @@ impl AppConfig {
         &self.dashboard_subtitle
     }
 
+    pub(crate) fn validate_dashboard(&self) -> Result<(), String> {
+        let dashboard = &self.dashboard;
+        if dashboard.kpis.is_empty()
+            && dashboard.trends.is_empty()
+            && dashboard.group_summary_label.is_none()
+        {
+            return Ok(());
+        }
+
+        let source = match &self.source {
+            Some(src) => src,
+            None => {
+                return Err("Dashboard requires a configured source".to_string());
+            }
+        };
+
+        for kpi in &dashboard.kpis {
+            let signal = match source
+                .signals
+                .iter()
+                .find(|signal| signal.group == kpi.group && signal.label == kpi.label)
+            {
+                Some(signal) => signal,
+                None => {
+                    return Err(format!(
+                        "KPI signal not found: group={}, label={}",
+                        kpi.group, kpi.label
+                    ));
+                }
+            };
+
+            if matches!(kpi.operation, KpiOperation::Peak)
+                && matches!(signal.signal_type, SignalType::Counter)
+            {
+                return Err(format!(
+                    "Peak is unsupported for counter: group={}, label={}",
+                    kpi.group, kpi.label
+                ));
+            }
+        }
+
+        for trend in &dashboard.trends {
+            let exists = source
+                .signals
+                .iter()
+                .any(|signal| signal.group == trend.group && signal.label == trend.label);
+
+            if !exists {
+                return Err(format!(
+                    "Trend signal not found: group={}, label={}",
+                    trend.group, trend.label
+                ));
+            }
+        }
+
+        if let Some(label) = &dashboard.group_summary_label {
+            let exists = source.signals.iter().any(|signal| signal.label == *label);
+
+            if !exists {
+                return Err(format!("Group summary label not found: {label}"));
+            }
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn db_path(&self) -> &str {
         &self.db_path
     }

@@ -76,6 +76,10 @@ async fn main() -> ExitCode {
             default_config
         }
     };
+    if let Err(error) = app_config.validate_dashboard() {
+        eprintln!("Invalid dashboard config: {error}");
+        return ExitCode::FAILURE;
+    }
     let app_state = AppState::from(
         app_config.clone(),
         CONFIG_PATH,
